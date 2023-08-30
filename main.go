@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	// "regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -25,16 +26,25 @@ const (
 	ProtocolICMP  = 1                        // Internet Control Message
 )
 
+type TcpPackage struct {
+	DstIP   string
+	DstPort uint16
+	SrcIP   string
+	SrcPort uint16
+	PayLoad []byte
+	Ack     uint32
+	Seq     uint32
+}
 type RequestPackage struct {
 	DstIP    string
 	DstPort  uint16
-	SrcIp    string
+	SrcIP    string
 	SrcPort  uint16
 	Host     string
 	Method   string
 	Protocol string
 	URL      string
-	ACK      uint32
+	Ack      uint32
 	TS       time.Time
 	PID      int32
 }
@@ -42,10 +52,10 @@ type RequestPackage struct {
 type ResponsePackage struct {
 	DstIP   string
 	DstPort uint16
-	SrcIp   string
+	SrcIP   string
 	SrcPort uint16
 	Code    string
-	SEQ     uint32
+	Seq     uint32
 	TS      time.Time
 	PID     int32
 }
@@ -53,7 +63,7 @@ type ResponsePackage struct {
 type FullHTTPPackage struct {
 	DstIP    string
 	DstPort  uint16
-	SrcIp    string
+	SrcIP    string
 	SrcPort  uint16
 	Host     string
 	Method   string
@@ -65,7 +75,7 @@ type FullHTTPPackage struct {
 }
 
 func (f *FullHTTPPackage) String() string {
-	return fmt.Sprintf("[%d] [%s][%d] --> [%s][%d][%s %s %s %s] ====> %s  [%dms]", f.PID, f.SrcIp, f.SrcPort, f.DstIP, f.DstPort, f.Protocol, f.Method, f.Host, f.URL, f.Code, f.Duration)
+	return fmt.Sprintf("[%s][%d] --> [%s][%d][%s %s %s] ====> %s  [%dus]", f.SrcIP, f.SrcPort, f.DstIP, f.DstPort, f.Method, f.Host, f.URL, f.Code, f.Duration)
 }
 func htons(i uint16) uint16 {
 	b := make([]byte, 2)
@@ -87,183 +97,167 @@ func main() {
 	}
 	defer coll.Close()
 
-	detachedEbpfProgram := coll.DetachProgram("socket__filter")
-	if detachedEbpfProgram == nil {
-		klog.Errorf("Error: no program named %s found !", "socket__filter")
+	httpRequestProgram := coll.DetachProgram("socket__filter_http_request")
+	if httpRequestProgram == nil {
+		klog.Errorf("Error: no program named %s found !", "socket__filter_http_request")
 	}
 
-	socketFd, err := syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW, int(htons(syscall.ETH_P_ALL)))
+	socketHttpRequestFd, err := syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW, int(htons(syscall.ETH_P_ALL)))
 	if err != nil {
 		panic(err)
 	}
-	defer syscall.Close(socketFd)
+	defer syscall.Close(socketHttpRequestFd)
 
-	if err := syscall.SetsockoptInt(socketFd, syscall.SOL_SOCKET, SO_ATTACH_BPF, detachedEbpfProgram.FD()); err != nil {
+	if err := syscall.SetsockoptInt(socketHttpRequestFd, syscall.SOL_SOCKET, SO_ATTACH_BPF, httpRequestProgram.FD()); err != nil {
 		log.Panic(err)
 	}
-	defer syscall.SetsockoptInt(socketFd, syscall.SOL_SOCKET, SO_DETACH_BPF, detachedEbpfProgram.FD())
+	defer syscall.SetsockoptInt(socketHttpRequestFd, syscall.SOL_SOCKET, SO_DETACH_BPF, httpRequestProgram.FD())
+	//----------------------------------------------
+	httpResponseProgram := coll.DetachProgram("socket__filter_http_response")
+	if httpResponseProgram == nil {
+		klog.Errorf("Error: no program named %s found !", "socket__filter_http_response")
+	}
 
-	var pid int32
-	debug := false
+	socketHttpResponseFd, err := syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW, int(htons(syscall.ETH_P_ALL)))
+	if err != nil {
+		panic(err)
+	}
+	defer syscall.Close(socketHttpResponseFd)
+
+	if err := syscall.SetsockoptInt(socketHttpResponseFd, syscall.SOL_SOCKET, SO_ATTACH_BPF, httpResponseProgram.FD()); err != nil {
+		log.Panic(err)
+	}
+	defer syscall.SetsockoptInt(socketHttpResponseFd, syscall.SOL_SOCKET, SO_DETACH_BPF, httpResponseProgram.FD())
 
 	reqmap := make(map[uint32]RequestPackage)
+
 	for {
-		buf := make([]byte, 1500)
-		numRead, _, err := syscall.Recvfrom(socketFd, buf, 0)
-		if err != nil {
-			log.Println(err)
-			continue
-		}
-		rawData := buf[:numRead]
-
-		//ETH的头部是14, IP的头部是20, TCP的头部是20(不包含option)
-		//根据包头长度来过滤掉非TCP的包
-		if numRead < 14+20+20 {
-			// log.Print("invalid tcp packet")
-			continue
-		}
-		packet := gopacket.NewPacket(rawData, layers.LayerTypeEthernet, gopacket.Default)
-		// 获得IP层的对象
-		ip := packet.Layer(layers.LayerTypeIPv4).(*layers.IPv4)
-		// 获得TCP层的对象
-		tcp := packet.Layer(layers.LayerTypeTCP).(*layers.TCP)
-		for _, i := range tcp.Options {
-			if i.OptionType == 253 {
-				pid = int32(binary.BigEndian.Uint32(i.OptionData[2:6]))
-				// fmt.Printf("%v\n", pid)
+		req := GetPayload(socketHttpRequestFd)
+		rsp := GetPayload(socketHttpResponseFd)
+		if len(req.PayLoad) > 0 {
+			method, url, host := DecodeHTTPRequest(req.PayLoad)
+			request := RequestPackage{
+				DstIP:   req.DstIP,
+				DstPort: req.DstPort,
+				SrcIP:   req.SrcIP,
+				SrcPort: req.SrcPort,
+				Host:    host,
+				Method:  method,
+				URL:     url,
+				Ack:     req.Ack,
+				TS:      time.Now(),
 			}
+			reqmap[req.Ack] = request
 		}
-		if debug {
-			log.Printf("===============================================================================================")
-			log.Printf("length: %d\n", numRead)
-			// for _, i := range tcp.Options {
-			// 	fmt.Printf("[TCP Option]: %+v\n", i.String())
 
-			// }
-			// fmt.Printf("[TCP Option]: %+v\n", tcp.Options.String())
-			log.Printf("[%s]:[%d] -> [%s]:[%d], pid: %d", ip.SrcIP, tcp.SrcPort, ip.DstIP, tcp.DstPort, pid)
-			if packet.ApplicationLayer() != nil {
-				fmt.Printf("application layer: %+v\n", packet.ApplicationLayer().LayerType())
+		if len(rsp.PayLoad) > 0 {
+			code := DecodeHTTPResponse(rsp.PayLoad)
+			response := ResponsePackage{
+				DstIP:   rsp.DstIP,
+				DstPort: rsp.DstPort,
+				SrcIP:   rsp.SrcIP,
+				SrcPort: rsp.SrcPort,
+				Code:    code,
+				Seq:     rsp.Seq,
+				TS:      time.Now(),
 			}
-			// contents包含了tcp报文头以及数据部分
-			// log.Printf("contend: %+v", string(tcp.Contents))
-			// payload仅包含了数据部分
-			// log.Printf("[SYN]: %v,[ACK]: %v,[FIN]: %v,[PSH]: %v,[RST]: %v,[URG]: %v\n", tcp.SYN, tcp.ACK, tcp.FIN, tcp.PSH, tcp.RST, tcp.URG)
-			log.Printf("[SYN]: %v\n", tcp.SYN)
-			log.Printf("[ACK]: %v\n", tcp.ACK)
-			log.Printf("[FIN]: %v\n", tcp.FIN)
-			log.Printf("[PSH]: %v\n", tcp.PSH)
-			log.Printf("[RST]: %v\n", tcp.RST)
-			log.Printf("[URG]: %v\n", tcp.URG)
-			log.Printf("[Window Size]: %v, [Seq Number]: %v, [Ack Number]: %v, [CheckSum]: %v, [UrgentPoint]: %v\n", tcp.Window, tcp.Seq, tcp.Ack, tcp.Checksum, tcp.Urgent)
-			// log.Printf("contend: %+v", string(tcp.Contents))
-			log.Printf("payload: %s", string(tcp.Payload))
-		}
-		//如何区分http还是https
-		// if (tcp.SrcPort == 80 || tcp.DstPort == 80) && len(tcp.Payload) > 0 {
-		if len(tcp.Payload) > 0 {
-
-			// if os.Getenv("DEBUG") = true {
-			// 	Debug()
-			// }
-
-			if IsHTTPRequest(tcp.Payload) {
-				method, url, protocol, host := DecodeHTTPRequest(tcp.Payload)
-				request := RequestPackage{
-					DstIP:    ip.DstIP.String(),
-					DstPort:  uint16(tcp.DstPort),
-					SrcIp:    ip.SrcIP.String(),
-					SrcPort:  uint16(tcp.SrcPort),
-					Host:     host,
-					Method:   method,
-					Protocol: protocol,
-					URL:      url,
-					ACK:      tcp.Ack,
-					TS:       time.Now(),
-					PID:      pid,
+			value, ok := reqmap[response.Seq]
+			duration := response.TS.Sub(value.TS).Microseconds()
+			if ok {
+				// if pid == 0 {
+				// 	response.PID = value.PID
+				// }
+				httppackage := FullHTTPPackage{
+					DstIP:    value.DstIP,
+					DstPort:  value.DstPort,
+					SrcIP:    value.SrcIP,
+					SrcPort:  value.SrcPort,
+					Host:     value.Host,
+					Method:   value.Method,
+					URL:      value.URL,
+					Code:     response.Code,
+					Duration: duration,
 				}
-				reqmap[tcp.Ack] = request
-			}
-
-			if IsHTTPResponse(tcp.Payload) {
-				code := DecodeHTTPResponse(tcp.Payload)
-				response := ResponsePackage{
-					DstIP:   ip.DstIP.String(),
-					DstPort: uint16(tcp.DstPort),
-					SrcIp:   ip.SrcIP.String(),
-					SrcPort: uint16(tcp.SrcPort),
-					Code:    code,
-					SEQ:     tcp.Seq,
-					TS:      time.Now(),
-					PID:     pid,
-				}
-				value, ok := reqmap[response.SEQ]
-				duration := response.TS.Sub(value.TS).Milliseconds()
-				if ok {
-					if pid == 0 {
-						response.PID = value.PID
-					}
-					httppackage := FullHTTPPackage{
-						DstIP:    value.DstIP,
-						DstPort:  value.DstPort,
-						SrcIp:    value.SrcIp,
-						SrcPort:  value.SrcPort,
-						Host:     value.Host,
-						Method:   value.Method,
-						Protocol: value.Protocol,
-						URL:      value.URL,
-						Code:     response.Code,
-						Duration: duration,
-						PID:      response.PID,
-					}
-					fmt.Println(httppackage.String())
-				}
+				fmt.Println(httppackage.String())
 			}
 		}
 	}
 }
 
-func IsHTTPRequest(p []byte) bool {
-	if len(p) < 6 {
-		return false
+func GetPayload(fd int) *TcpPackage {
+	debug := true
+	buf := make([]byte, 1500)
+	numRead, _, err := syscall.Recvfrom(fd, buf, 0)
+	if err != nil {
+		return nil
 	}
-	if string(p[0:3]) == "GET" {
-		return true
+	rawData := buf[:numRead]
+
+	//ETH的头部是14, IP的头部是20, TCP的头部是20(不包含option)
+	//根据包头长度来过滤掉非TCP的包
+	if numRead < 14+20+20 {
+		// log.Print("invalid tcp packet")
+		return nil
 	}
-	if string(p[0:4]) == "POST" {
-		return true
+	packet := gopacket.NewPacket(rawData, layers.LayerTypeEthernet, gopacket.Default)
+	// 获得IP层的对象
+	ip := packet.Layer(layers.LayerTypeIPv4).(*layers.IPv4)
+	// 获得TCP层的对象
+	tcp := packet.Layer(layers.LayerTypeTCP).(*layers.TCP)
+	//从TCP option中获取pid，依赖deepflow的tot内核模块
+	// for _, i := range tcp.Options {
+	// 	if i.OptionType == 253 {
+	// 		pid = int32(binary.BigEndian.Uint32(i.OptionData[2:6]))
+	// 	}
+	// }
+	if debug {
+		log.Printf("===============================================================================================")
+		log.Printf("length: %d\n", numRead)
+		log.Printf("[%s]:[%d] -> [%s]:[%d]", ip.SrcIP, tcp.SrcPort, ip.DstIP, tcp.DstPort)
+		if packet.ApplicationLayer() != nil {
+			fmt.Printf("application layer: %+v\n", packet.ApplicationLayer().LayerType())
+		}
+		// contents包含了tcp报文头以及数据部分
+		// payload仅包含了数据部分
+		log.Printf("[SYN]: %v\n", tcp.SYN)
+		log.Printf("[ACK]: %v\n", tcp.ACK)
+		log.Printf("[FIN]: %v\n", tcp.FIN)
+		log.Printf("[PSH]: %v\n", tcp.PSH)
+		log.Printf("[RST]: %v\n", tcp.RST)
+		log.Printf("[URG]: %v\n", tcp.URG)
+		log.Printf("[Window Size]: %v, [Seq Number]: %v, [Ack Number]: %v, [CheckSum]: %v, [UrgentPoint]: %v\n", tcp.Window, tcp.Seq, tcp.Ack, tcp.Checksum, tcp.Urgent)
+		log.Printf("payload: %s", string(tcp.Payload))
 	}
-	if string(p[0:3]) == "PUT" {
-		return true
-	}
-	if string(p[0:6]) == "DELETE" {
-		return true
-	}
-	if string(p[0:4]) == "HEAD" {
-		return true
-	}
-	return false
+	p := new(TcpPackage)
+	p.DstIP = ip.DstIP.String()
+	p.SrcIP = ip.SrcIP.String()
+	p.DstPort = uint16(tcp.DstPort)
+	p.SrcPort = uint16(tcp.SrcPort)
+	p.PayLoad = tcp.Payload
+	p.Ack = tcp.Ack
+	p.Seq = tcp.Seq
+	return p
 }
 
-func IsHTTPResponse(p []byte) bool {
-	if len(p) < 4 {
-		return false
-	}
-	if string(p[0:4]) == "HTTP" {
-		return true
-	}
-	return false
+// method, url, host
+func DecodeHTTPRequest(p []byte) (string, string, string) {
+	// var host string
+	s := string(p)
+	// pattern := `Host:\s+(\S+)`
+	// re := regexp.MustCompile(pattern)
+	// match := re.FindStringSubmatch(s)
+
+	// if len(match) > 1 {
+	// 	// 输出匹配到的 Host
+	// 	host = match[1]
+	// }
+
+	lines := strings.Split(s, "\n")
+	items := strings.Fields(lines[0])
+	return items[0], items[1], ""
 }
 
-func DecodeHTTPRequest(p []byte) (string, string, string, string) {
-	s := strings.Split(string(p), "\n")
-	l0 := strings.Fields(s[0])
-	// log.Printf("ssssss, %+v\n", s[0])
-	// log.Printf("llll, %+v\n", l0[0])
-	l1 := strings.Fields(s[1])
-	return l0[0], l0[1], l0[2], l1[1]
-}
-
+// httpcode
 func DecodeHTTPResponse(p []byte) string {
 	s := strings.Split(string(p), "\n")
 	l0 := strings.Fields(s[0])

@@ -14,6 +14,8 @@ PROGRAM = main
 all:
 	$(MAKE) -C . $(PROGRAM)
 
+.PHONY: $(PROGRAM)
+
 $(PROGRAM):
 	sh build.sh
 	CC=$(CLANG) \
