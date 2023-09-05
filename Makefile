@@ -25,7 +25,7 @@ $(PROGRAM):
                 GOARCH=$(GOARCH) \
                 go build \
                 -tags netgo -ldflags $(CGO_EXTLDFLAGS_STATIC) \
-                -o $(PROGRAM) ./$(PROGRAM).go
+                -o $(PROGRAM) ./*.go
 
 .PHONE: run
 run:

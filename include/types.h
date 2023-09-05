@@ -39,12 +39,12 @@ typedef __s16 s16;
 typedef __u8  u8;
 typedef __s8  s8;
 
-#ifdef __CHECKER__
-#define __bitwise__ __attribute__((bitwise))
-#else
-#define __bitwise__
-#endif
-#define __bitwise __bitwise__
+// #ifdef __CHECKER__
+// #define __bitwise__ __attribute__((bitwise))
+// #else
+// #define __bitwise__
+// #endif
+// #define __bitwise __bitwise__
 
 #define __force
 #define __user

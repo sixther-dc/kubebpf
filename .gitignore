@@ -1,2 +1,4 @@
 /main
 /main.bpf.o
+/vendor/
+/go.sum
