@@ -82,9 +82,6 @@ static int (*bpf_perf_event_read_value)(void *map, unsigned long long flags,
 static int (*bpf_perf_prog_read_value)(void *ctx, void *buf,
 				       unsigned int buf_size) =
 	(void *) BPF_FUNC_perf_prog_read_value;
-static void *(*bpf_ringbuf_reserve)(void *ringbuf, __u64 size, __u64 flags) = (void *) 131;
-static void (*bpf_ringbuf_submit)(void *data, __u64 flags) = (void *) 132;
-static void (*bpf_ringbuf_discard)(void *data, __u64 flags) = (void *) 133;
 
 
 /* llvm builtin functions that eBPF C program may use to

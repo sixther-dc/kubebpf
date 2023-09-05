@@ -1,5 +1,6 @@
 #include <linux/bpf.h>
 #include "include/bpf_helpers.h"
+// #include <bpf/bpf_helpers.h>
 #include "include/bpf_endian.h"
 #include "include/types.h"
 #include <linux/if_ether.h>
@@ -26,12 +27,17 @@ struct package_t {
 	__u32 seq;
 	//packge的产生时间
 	__u32 ts;
-    char payload[512];
+    char payload[256];
 };
 
 //定义了一个名为http_request的map，用于传递解析之后的http request数据到用户态
+// struct bpf_map_def SEC("maps/http_request_package_map") package_map = {
+//   	.type = BPF_MAP_TYPE_RINGBUF,
+// 	.max_entries = 1024 * 16,
+// };
+
 struct bpf_map_def SEC("maps/http_request_package_map") package_map = {
-  	.type = BPF_MAP_TYPE_RINGBUF,
+  	.type = BPF_MAP_TYPE_PERF_EVENT_ARRAY,
 	.max_entries = 1024 * 16,
 };
 
@@ -84,7 +90,7 @@ void __load_payload_to_map(struct __sk_buff *skb, int type,  __u32 poffset, __u3
     bpf_trace_printk(fmt, sizeof(fmt), p->ts);
 	unsigned i = 0;
 	for (; i < plength; i++) {          
-		if (i > 400) {break;}                                                                                                                                                                        \
+		if (i > 220) {break;}
         bpf_skb_load_bytes(skb, poffset, &p->payload[i], 1);                                     
        	poffset ++;                                                                                  
     }
@@ -100,11 +106,11 @@ int socket__filter_package(struct __sk_buff *skb)
 	// Skip non-ICMP packets
 	if (load_byte(skb, ETH_HLEN + offsetof(struct iphdr, protocol)) != IPPROTO_TCP)
 		return 0;
-	struct package_t *p;
-	p = bpf_ringbuf_reserve(&package_map, sizeof(*p), 0);
-	if (!p) {
-        return 0;
-    }
+	struct package_t p = {};
+	// p = bpf_ringbuf_reserve(&package_map, sizeof(*p), 0);
+	// if (!p) {
+    //     return 0;
+    // }
   	__u32 poffset = 0;
 	__u32 plength = 0;
 	struct iphdr iph;
@@ -133,23 +139,21 @@ int socket__filter_package(struct __sk_buff *skb)
 	char pre_char[12];
 	bpf_skb_load_bytes(skb, poffset, pre_char, 12);
     //将tcp包数据部分的迁256个字节放入p，因为http使用的是ascii编码，而ascii编码中一个字符占用一个字节。
-	p->srcip = iph.saddr;
-	p->dstip = iph.daddr;
-	p->srcport = tcph.source;
-	p->dstport = tcph.dest;
-	p->ack = tcph.ack_seq;
-	p->seq = tcph.seq;
+	p.srcip = iph.saddr;
+	p.dstip = iph.daddr;
+	p.srcport = tcph.source;
+	p.dstport = tcph.dest;
+	p.ack = tcph.ack_seq;
+	p.seq = tcph.seq;
 	//判断数据包的类型，HTTP,MySQL,MQ,RPC等。
 	if (__is_http_request(pre_char)) {
-		__load_payload_to_map(skb, TYPE_HTTP_REQUEST, poffset, plength, p);
-		bpf_ringbuf_submit(p, 0);
+		__load_payload_to_map(skb, TYPE_HTTP_REQUEST, poffset, plength, &p);
 	} else if (__is_http_response(pre_char)) {
-		__load_payload_to_map(skb, TYPE_HTTP_RESPONSE, poffset, plength, p);
-		bpf_ringbuf_submit(p, 0);
+		__load_payload_to_map(skb, TYPE_HTTP_RESPONSE, poffset, plength, &p);
 	} else {
-		//用于解决ringbuf每次进入内核不推送数据就报错的问题;
-		bpf_ringbuf_discard(p, BPF_RB_FORCE_WAKEUP);
+		return -1;
 	}
+	bpf_perf_event_output(skb, &package_map, BPF_F_CURRENT_CPU, &p, sizeof(p));
     return -1;
 }
 char _license[] SEC("license") = "GPL";

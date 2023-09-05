@@ -8,13 +8,14 @@ import (
 	"log"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
 	"syscall"
 	"unsafe"
 
 	"k8s.io/klog"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/ringbuf"
+	"github.com/cilium/ebpf/perf"
 	"github.com/cilium/ebpf/rlimit"
 )
 
@@ -67,7 +68,7 @@ func main() {
 
 	requestMap := coll.DetachMap("package_map")
 
-	rd, err := ringbuf.NewReader(requestMap)
+	rd, err := perf.NewReader(requestMap, os.Getpagesize())
 	if err != nil {
 		log.Fatalf("opening ringbuf reader: %s", err)
 	}
@@ -77,7 +78,7 @@ func main() {
 	for {
 		record, err := rd.Read()
 		if err != nil {
-			if errors.Is(err, ringbuf.ErrClosed) {
+			if errors.Is(err, perf.ErrClosed) {
 				log.Println("Received signal, exiting..")
 				return
 			}
