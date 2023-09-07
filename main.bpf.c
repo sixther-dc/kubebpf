@@ -11,14 +11,21 @@
 #include <linux/tcp.h>
 #include <linux/types.h>
 
+
 enum package_type {
-	TYPE_HTTP_REQUEST = 1,
-	TYPE_HTTP_RESPONSE = 2,
+	T_HTTP = 1,
+	T_RPC = 2,
+	T_MYSQL = 3,
+};
+
+enum package_status {
+	S_REQUEST = 1,
+	S_RESPONSE = 2,
 };
 
 struct package_t {
-	//package的类型,见 enum package_type
-	__u32 type;
+	//package的状态,见 enum package_type
+	__u32 status;
     __u32 dstip;
     __u32 dstport;
 	__u32 srcip;
@@ -26,18 +33,24 @@ struct package_t {
 	__u32 ack;
 	__u32 seq;
 	//packge的产生时间
-	__u32 ts;
-    char payload[256];
+	__u32 duration;
+    char req_payload[180];
+	char rsp_payload[180];
 };
 
-//定义了一个名为http_request的map，用于传递解析之后的http request数据到用户态
-// struct bpf_map_def SEC("maps/http_request_package_map") package_map = {
-//   	.type = BPF_MAP_TYPE_RINGBUF,
-// 	.max_entries = 1024 * 16,
-// };
+// 定义了一个名为request_map的map，用于临时记录请求包，以便配对完整的请求/响应包
+struct bpf_map_def SEC("maps/package_map") request_map = {
+  	.type = BPF_MAP_TYPE_HASH,
+	.key_size = sizeof(__u32),
+	.value_size = sizeof(struct package_t),
+	.max_entries = 1024 * 16,
+};
 
-struct bpf_map_def SEC("maps/http_request_package_map") package_map = {
-  	.type = BPF_MAP_TYPE_PERF_EVENT_ARRAY,
+// 定义了一个名为response_map的map，用于传递解析之后的http请求数据到用户态
+struct bpf_map_def SEC("maps/package_map") response_map = {
+  	.type = BPF_MAP_TYPE_HASH,
+	.key_size = sizeof(__u32),
+	.value_size = sizeof(struct package_t),
 	.max_entries = 1024 * 16,
 };
 
@@ -83,16 +96,12 @@ int __is_http_response(char p[12]) {
 }
 
 //加载skb中的数据部分到对应的map->payload中
-void __load_payload_to_map(struct __sk_buff *skb, int type,  __u32 poffset, __u32 plength,  struct package_t *p) {
-	p->type = type;
-	p->ts = bpf_ktime_get_ns();
-    char fmt[] = "ts: %d\n";
-    bpf_trace_printk(fmt, sizeof(fmt), p->ts);
+void __load_payload_to_map(struct __sk_buff *skb, int max,  __u32 poffset, __u32 plength,  char p[256]) {
 	unsigned i = 0;
-	for (; i < plength; i++) {          
-		if (i > 220) {break;}
-        bpf_skb_load_bytes(skb, poffset, &p->payload[i], 1);                                     
-       	poffset ++;                                                                                  
+	//低版本内核不允许是要多层级的for循环，经过测试这个数字是12，原因不明。 12 * 15 = 180
+	for (; i < 12; i++) {          
+        bpf_skb_load_bytes(skb, poffset, &p[i * 15], 15);                                     
+       	poffset += 15;                                                                                  
     }
 }
 
@@ -107,10 +116,6 @@ int socket__filter_package(struct __sk_buff *skb)
 	if (load_byte(skb, ETH_HLEN + offsetof(struct iphdr, protocol)) != IPPROTO_TCP)
 		return 0;
 	struct package_t p = {};
-	// p = bpf_ringbuf_reserve(&package_map, sizeof(*p), 0);
-	// if (!p) {
-    //     return 0;
-    // }
   	__u32 poffset = 0;
 	__u32 plength = 0;
 	struct iphdr iph;
@@ -134,7 +139,6 @@ int socket__filter_package(struct __sk_buff *skb)
   	//算出tcp携带的数据的其实偏移位置
   	poffset = ETH_HLEN + ip_hlen + tcp_hlen;
   	//算出tcp携带的数据的长度
-  	// plength = ip_total_length - ip_hlen - tcp_hlen;
 	plength = skb->len - poffset;
 	char pre_char[12];
 	bpf_skb_load_bytes(skb, poffset, pre_char, 12);
@@ -147,13 +151,25 @@ int socket__filter_package(struct __sk_buff *skb)
 	p.seq = tcph.seq;
 	//判断数据包的类型，HTTP,MySQL,MQ,RPC等。
 	if (__is_http_request(pre_char)) {
-		__load_payload_to_map(skb, TYPE_HTTP_REQUEST, poffset, plength, &p);
+		p.status = S_REQUEST;
+		p.duration = bpf_ktime_get_ns();
+		__load_payload_to_map(skb, 220, poffset, plength, p.req_payload);                                   
+		bpf_map_update_elem(&request_map, &p.ack, &p, BPF_ANY);
 	} else if (__is_http_response(pre_char)) {
-		__load_payload_to_map(skb, TYPE_HTTP_RESPONSE, poffset, plength, &p);
+		struct package_t *req;
+    	req = bpf_map_lookup_elem(&request_map, &p.seq);
+    	if (!req) {
+        	return -1;
+    	}
+		bpf_map_delete_elem(&request_map, &p.seq);
+		req->status = S_RESPONSE;
+		req->duration = bpf_ktime_get_ns() - req->duration;
+		__load_payload_to_map(skb, 100, poffset, plength, req->rsp_payload);
+		bpf_map_update_elem(&response_map, &p.seq, req, BPF_ANY);
 	} else {
 		return -1;
 	}
-	bpf_perf_event_output(skb, &package_map, BPF_F_CURRENT_CPU, &p, sizeof(p));
-    return -1;
+	// bpf_perf_event_output(skb, &package_map, BPF_F_CURRENT_CPU, &p, sizeof(p));
+    return 0;
 }
 char _license[] SEC("license") = "GPL";

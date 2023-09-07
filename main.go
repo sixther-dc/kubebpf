@@ -3,19 +3,18 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
-	"fmt"
+	// "errors"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
-	"os"
+	"time"
+	// "os"
 	"syscall"
 	"unsafe"
 
 	"k8s.io/klog"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/perf"
 	"github.com/cilium/ebpf/rlimit"
 )
 
@@ -66,70 +65,20 @@ func main() {
 	}
 	defer syscall.SetsockoptInt(socketHttpRequestFd, syscall.SOL_SOCKET, SO_DETACH_BPF, httpRequestProgram.FD())
 
-	requestMap := coll.DetachMap("package_map")
+	var (
+		key uint32
+		val []byte
+	)
+	requestMap := coll.DetachMap("response_map")
 
-	rd, err := perf.NewReader(requestMap, os.Getpagesize())
-	if err != nil {
-		log.Fatalf("opening ringbuf reader: %s", err)
-	}
-	defer rd.Close()
-
-	reqmap := make(map[uint32]RequestPackage)
 	for {
-		record, err := rd.Read()
-		if err != nil {
-			if errors.Is(err, perf.ErrClosed) {
-				log.Println("Received signal, exiting..")
-				return
-			}
-			log.Printf("reading from reader: %s", err)
-			continue
-		}
-		// log.Printf("raw data: %+v\n", record.RawSample)
-		m := DecodeMapItem(record.RawSample)
-		if m.Type == 1 {
-			method, url, host := DecodeHTTPRequest(m.PayLoad)
-			request := RequestPackage{
-				DstIP:   m.DstIP,
-				DstPort: m.DstPort,
-				SrcIP:   m.SrcIP,
-				SrcPort: m.SrcPort,
-				Host:    host,
-				Method:  method,
-				URL:     url,
-				Ack:     m.Ack,
-				TS:      m.TS,
-			}
-			reqmap[m.Ack] = request
-		}
-
-		if m.Type == 2 {
-			code := DecodeHTTPResponse(m.PayLoad)
-			response := ResponsePackage{
-				DstIP:   m.DstIP,
-				DstPort: m.DstPort,
-				SrcIP:   m.SrcIP,
-				SrcPort: m.SrcPort,
-				Code:    code,
-				Seq:     m.Seq,
-				TS:      m.TS,
-			}
-			value, ok := reqmap[m.Seq]
-			duration := (response.TS - value.TS) / (1000 * 1000) //ms
-			if ok {
-				httppackage := FullHTTPPackage{
-					DstIP:    value.DstIP,
-					DstPort:  value.DstPort,
-					SrcIP:    value.SrcIP,
-					SrcPort:  value.SrcPort,
-					Host:     value.Host,
-					Method:   value.Method,
-					URL:      value.URL,
-					Code:     response.Code,
-					Duration: duration,
-				}
-				fmt.Println(httppackage.String())
+		for requestMap.Iterate().Next(&key, &val) {
+			m := DecodeMapItem(val)
+			log.Printf("%s\n", m)
+			if err := requestMap.Delete(key); err != nil {
+				panic(err)
 			}
 		}
+		time.Sleep(1 * time.Second)
 	}
 }

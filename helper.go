@@ -10,64 +10,25 @@ import (
 )
 
 type MapPackage struct {
-	Type    uint32
-	DstIP   string
-	DstPort uint16
-	SrcIP   string
-	SrcPort uint16
-	Ack     uint32
-	Seq     uint32
-	TS      uint32
-	PayLoad string
-}
-
-type TcpPackage struct {
-	DstIP   string
-	DstPort uint16
-	SrcIP   string
-	SrcPort uint16
-	PayLoad []byte
-	Ack     uint32
-	Seq     uint32
-}
-type RequestPackage struct {
+	Status   uint32
 	DstIP    string
 	DstPort  uint16
 	SrcIP    string
 	SrcPort  uint16
-	Host     string
-	Method   string
-	Protocol string
-	URL      string
 	Ack      uint32
-	TS       uint32
-}
-
-type ResponsePackage struct {
-	DstIP   string
-	DstPort uint16
-	SrcIP   string
-	SrcPort uint16
-	Code    string
-	Seq     uint32
-	TS      uint32
-}
-
-type FullHTTPPackage struct {
-	DstIP    string
-	DstPort  uint16
-	SrcIP    string
-	SrcPort  uint16
+	Seq      uint32
+	Duration uint32
 	Host     string
 	Method   string
 	Protocol string
 	URL      string
 	Code     string
-	Duration uint32
+	// ReqPayLoad string
+	// RspPayLoad string
 }
 
-func (f *FullHTTPPackage) String() string {
-	return fmt.Sprintf("[%s][%d] --> [%s][%d][%s %s] ====> %s  [%dms]", f.SrcIP, f.SrcPort, f.DstIP, f.DstPort, f.Method, f.URL, f.Code, f.Duration)
+func (m *MapPackage) String() string {
+	return fmt.Sprintf("[%s][%d] --> [%s][%d][%s %s] ====> %s  [%dms]", m.SrcIP, m.SrcPort, m.DstIP, m.DstPort, m.Method, m.URL, m.Code, m.Duration)
 }
 
 func uint32ToIpV4(n uint32) net.IP {
@@ -78,17 +39,21 @@ func uint32ToIpV4(n uint32) net.IP {
 
 func DecodeMapItem(e []byte) *MapPackage {
 	m := new(MapPackage)
-	m.Type = binary.LittleEndian.Uint32(e[0:4])
+	m.Status = binary.LittleEndian.Uint32(e[0:4])
 	m.DstIP = net.IP(e[4:8]).String()
 	m.DstPort = binary.BigEndian.Uint16(e[8:10])
 	m.SrcIP = net.IP(e[12:16]).String()
 	m.SrcPort = binary.BigEndian.Uint16(e[16:20])
 	m.Ack = binary.BigEndian.Uint32(e[20:24])
 	m.Seq = binary.BigEndian.Uint32(e[24:28])
-	m.TS = binary.LittleEndian.Uint32(e[28:32])
+	m.Duration = binary.LittleEndian.Uint32(e[28:32]) / (1000 * 1000)
 	//TODO: fix it
-	m.PayLoad = string(e[32:])
-	// fmt.Printf("ssssss: %+v\n", m)
+	method, url, host := DecodeHTTPRequest(string(e[32:212]))
+	m.Method = method
+	m.URL = url
+	m.Host = host
+	code := DecodeHTTPResponse(string(e[212:392]))
+	m.Code = code
 	return m
 }
 
@@ -103,9 +68,11 @@ func DecodeHTTPRequest(s string) (string, string, string) {
 		// 输出匹配到的 Host
 		host = match[1]
 	}
-
 	lines := strings.Split(s, "\n")
 	items := strings.Fields(lines[0])
+	if len(items) < 2 {
+		return "", "", ""
+	}
 	return items[0], items[1], host
 }
 
