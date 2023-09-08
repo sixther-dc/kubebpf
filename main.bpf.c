@@ -18,14 +18,14 @@ enum package_type {
 	T_MYSQL = 3,
 };
 
-enum package_status {
-	S_REQUEST = 1,
-	S_RESPONSE = 2,
+enum package_phase {
+	P_REQUEST = 1,
+	P_RESPONSE = 2,
 };
 
 struct package_t {
-	//package的状态,见 enum package_type
-	__u32 status;
+	//package的阶段,见 enum package_phase
+	__u32 phase;
     __u32 dstip;
     __u32 dstport;
 	__u32 srcip;
@@ -36,6 +36,7 @@ struct package_t {
 	__u32 duration;
     char req_payload[180];
 	char rsp_payload[180];
+	__u32 type;
 };
 
 // 定义了一个名为request_map的map，用于临时记录请求包，以便配对完整的请求/响应包
@@ -76,7 +77,7 @@ int __is_http_request(char p[12]) {
         return 1;
   	}
     //OPTIONS
-	//TODO:  fix it.
+	// TODO:  fix it.
   	// if ((p[0] == 'O') && (p[1] == 'P') && (p[2] == 'T') && (p[3] == 'I') && (p[4] == 'O') && (p[5] == 'N') && (p[6] == 'S')) {
     //     return 1;
   	// }
@@ -96,7 +97,7 @@ int __is_http_response(char p[12]) {
 }
 
 //加载skb中的数据部分到对应的map->payload中
-void __load_payload_to_map(struct __sk_buff *skb, int max,  __u32 poffset, __u32 plength,  char p[256]) {
+void __load_payload_to_map(struct __sk_buff *skb, __u32 poffset,  char p[180]) {
 	unsigned i = 0;
 	//低版本内核不允许是要多层级的for循环，经过测试这个数字是12，原因不明。 12 * 15 = 180
 	for (; i < 12; i++) {          
@@ -104,6 +105,22 @@ void __load_payload_to_map(struct __sk_buff *skb, int max,  __u32 poffset, __u32
        	poffset += 15;                                                                                  
     }
 }
+
+// int __handle_requst_package(int typem, struct package_t *p, struct __sk_buff *skb, __u32 poffset) {
+// 		struct package_t req = {};
+// 		req.srcip = p->srcip;
+// 		req.dstip = p->dstip;
+// 		req.srcport = p->srcport;
+// 		req.dstport = p->dstport;
+// 		req.ack = p->ack;
+// 		req.seq = p->seq;
+// 		req.type = T_HTTP;
+// 		req.phase = P_REQUEST;
+// 		req.start_time = bpf_ktime_get_ns();
+// 		__load_payload_to_map(skb, poffset, req.req_payload);                                   
+// 		bpf_map_update_elem(&request_map, &req.ack, &req, BPF_ANY);
+// 		return 0;
+// }
 
 SEC("socket")
 int socket__filter_package(struct __sk_buff *skb)
@@ -117,7 +134,7 @@ int socket__filter_package(struct __sk_buff *skb)
 		return 0;
 	struct package_t p = {};
   	__u32 poffset = 0;
-	__u32 plength = 0;
+	// __u32 plength = 0;
 	struct iphdr iph;
   	//将skb中的ip头部分按照字节的偏移位置复制到iph变量
   	bpf_skb_load_bytes(skb, ETH_HLEN, &iph, sizeof(iph));
@@ -139,7 +156,7 @@ int socket__filter_package(struct __sk_buff *skb)
   	//算出tcp携带的数据的其实偏移位置
   	poffset = ETH_HLEN + ip_hlen + tcp_hlen;
   	//算出tcp携带的数据的长度
-	plength = skb->len - poffset;
+	// plength = skb->len - poffset;
 	char pre_char[12];
 	bpf_skb_load_bytes(skb, poffset, pre_char, 12);
     //将tcp包数据部分的迁256个字节放入p，因为http使用的是ascii编码，而ascii编码中一个字符占用一个字节。
@@ -151,9 +168,12 @@ int socket__filter_package(struct __sk_buff *skb)
 	p.seq = tcph.seq;
 	//判断数据包的类型，HTTP,MySQL,MQ,RPC等。
 	if (__is_http_request(pre_char)) {
-		p.status = S_REQUEST;
+		// __handle_requst_package(T_HTTP, &p, skb, poffset);
+		p.type = T_HTTP;
+		p.phase = P_REQUEST;
+		// bpf_ktime_get_ns 获取内核自启动以来的时长,单位是纳秒,这里获取不到系统当前时间.
 		p.duration = bpf_ktime_get_ns();
-		__load_payload_to_map(skb, 220, poffset, plength, p.req_payload);                                   
+		__load_payload_to_map(skb, poffset, p.req_payload);                                   
 		bpf_map_update_elem(&request_map, &p.ack, &p, BPF_ANY);
 	} else if (__is_http_response(pre_char)) {
 		struct package_t *req;
@@ -162,9 +182,9 @@ int socket__filter_package(struct __sk_buff *skb)
         	return -1;
     	}
 		bpf_map_delete_elem(&request_map, &p.seq);
-		req->status = S_RESPONSE;
+		req->phase = P_RESPONSE;
 		req->duration = bpf_ktime_get_ns() - req->duration;
-		__load_payload_to_map(skb, 100, poffset, plength, req->rsp_payload);
+		__load_payload_to_map(skb, poffset, req->rsp_payload);
 		bpf_map_update_elem(&response_map, &p.seq, req, BPF_ANY);
 	} else {
 		return -1;

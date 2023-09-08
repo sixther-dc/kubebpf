@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
-	"regexp"
 	"strings"
+	"time"
 )
 
 type MapPackage struct {
-	Status   uint32
+	Type     uint32
 	DstIP    string
 	DstPort  uint16
 	SrcIP    string
@@ -23,23 +23,14 @@ type MapPackage struct {
 	Protocol string
 	URL      string
 	Code     string
-	// ReqPayLoad string
-	// RspPayLoad string
 }
 
 func (m *MapPackage) String() string {
-	return fmt.Sprintf("[%s][%d] --> [%s][%d][%s %s] ====> %s  [%dms]", m.SrcIP, m.SrcPort, m.DstIP, m.DstPort, m.Method, m.URL, m.Code, m.Duration)
-}
-
-func uint32ToIpV4(n uint32) net.IP {
-	ip := make(net.IP, 4)
-	binary.LittleEndian.PutUint32(ip, n)
-	return ip
+	return fmt.Sprintf("%s [%s][%d] --> [%s][%d][%s %s] ====> %s [%dms]", time.Now().Format("2006-01-02 15:04:05"), m.SrcIP, m.SrcPort, m.DstIP, m.DstPort, m.Method, m.URL, m.Code, m.Duration)
 }
 
 func DecodeMapItem(e []byte) *MapPackage {
 	m := new(MapPackage)
-	m.Status = binary.LittleEndian.Uint32(e[0:4])
 	m.DstIP = net.IP(e[4:8]).String()
 	m.DstPort = binary.BigEndian.Uint16(e[8:10])
 	m.SrcIP = net.IP(e[12:16]).String()
@@ -47,40 +38,45 @@ func DecodeMapItem(e []byte) *MapPackage {
 	m.Ack = binary.BigEndian.Uint32(e[20:24])
 	m.Seq = binary.BigEndian.Uint32(e[24:28])
 	m.Duration = binary.LittleEndian.Uint32(e[28:32]) / (1000 * 1000)
-	//TODO: fix it
 	method, url, host := DecodeHTTPRequest(string(e[32:212]))
 	m.Method = method
 	m.URL = url
 	m.Host = host
-	code := DecodeHTTPResponse(string(e[212:392]))
+	code := DecodeHTTPResponse(e[212:392])
+	// fmt.Printf("request, %+v\n", string(e[32:212]))
+	// fmt.Printf("response, %+v\n", string(e[212:392]))
 	m.Code = code
+	m.Type = binary.LittleEndian.Uint32(e[392:396])
 	return m
 }
 
 // method, url, host
 func DecodeHTTPRequest(s string) (string, string, string) {
-	var host string
-	pattern := `Host:\s+(\S+)`
-	re := regexp.MustCompile(pattern)
-	match := re.FindStringSubmatch(s)
+	// var host string
+	//使用正则会有较多的开销，尽量使用byte的位置截取
+	// pattern := `Host:\s+(\S+)`
+	// re := regexp.MustCompile(pattern)
+	// match := re.FindStringSubmatch(s)
 
-	if len(match) > 1 {
-		// 输出匹配到的 Host
-		host = match[1]
-	}
+	// if len(match) > 1 {
+	// 	// 输出匹配到的 Host
+	// 	host = match[1]
+	// }
 	lines := strings.Split(s, "\n")
 	items := strings.Fields(lines[0])
 	if len(items) < 2 {
 		return "", "", ""
 	}
-	return items[0], items[1], host
+	return items[0], items[1], ""
 }
 
 // httpcode
-func DecodeHTTPResponse(p string) string {
-	s := strings.Split(p, "\n")
-	l0 := strings.Fields(s[0])
-	return l0[1]
+func DecodeHTTPResponse(p []byte) string {
+	//response, HTTP/1.1 200 OK
+	if len(p) < 11 {
+		return ""
+	}
+	return string(p[9:12])
 }
 
 func GetEBPFProg() []byte {

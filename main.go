@@ -3,16 +3,15 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"time"
 	// "errors"
-	"log"
+	"fmt"
 	"net/http"
 	_ "net/http/pprof"
-	"time"
 	// "os"
+	"log"
 	"syscall"
 	"unsafe"
-
-	"k8s.io/klog"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/rlimit"
@@ -42,16 +41,16 @@ func main() {
 
 	spec, err := ebpf.LoadCollectionSpecFromReader(bytes.NewReader(eBPFprogram))
 	if err != nil {
-		klog.Errorln("Error loading eBPF collectionSpec: ", err)
+		log.Printf("Error loading eBPF collectionSpec: ", err)
 	}
 	coll, err := ebpf.NewCollectionWithOptions(spec, ebpf.CollectionOptions{})
 	if err != nil {
-		klog.Errorln("Error getting the eBPF program collection: ", err)
+		log.Printf("Error getting the eBPF program collection: ", err)
 	}
 	defer coll.Close()
 	httpRequestProgram := coll.DetachProgram("socket__filter_package")
 	if httpRequestProgram == nil {
-		klog.Errorf("Error: no program named %s found !", "socket__filter_package")
+		log.Printf("Error: no program named %s found !", "socket__filter_package")
 	}
 
 	socketHttpRequestFd, err := syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW, int(htons(syscall.ETH_P_ALL)))
@@ -74,7 +73,7 @@ func main() {
 	for {
 		for requestMap.Iterate().Next(&key, &val) {
 			m := DecodeMapItem(val)
-			log.Printf("%s\n", m)
+			fmt.Printf("%s\n", m)
 			if err := requestMap.Delete(key); err != nil {
 				panic(err)
 			}
