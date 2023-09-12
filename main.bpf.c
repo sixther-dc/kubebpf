@@ -129,7 +129,7 @@ int socket__filter_package(struct __sk_buff *skb)
 	if (load_half(skb, offsetof(struct ethhdr, h_proto)) != ETH_P_IP)
 		return 0;
 
-	// Skip non-ICMP packets
+	// Skip non-TCP packets
 	if (load_byte(skb, ETH_HLEN + offsetof(struct iphdr, protocol)) != IPPROTO_TCP)
 		return 0;
 	struct package_t p = {};
