@@ -2,6 +2,7 @@ package controller
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"flag"
 	"log"
@@ -13,6 +14,7 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -98,7 +100,8 @@ func (c *Controller) addAndUpdate(new *corev1.Endpoints, nodename string) {
 				index, err := c.getNetfaceIndex(address.TargetRef.Name,
 					address.TargetRef.Namespace)
 				if err != nil {
-					log.Printf("Get netface index error: %v\n", err)
+					log.Printf("Get netface index error: %v [%s][%s]\n",
+						err, address.TargetRef.Namespace, address.TargetRef.Name)
 					break
 				}
 				if index == 2 {
@@ -108,8 +111,8 @@ func (c *Controller) addAndUpdate(new *corev1.Endpoints, nodename string) {
 				if ok {
 					//会有多个endpint对应一个pod的不同端口的情况, 对于普通类型的pod流量去全采集
 					if index != 2 {
-						log.Printf("normal interface of ebpf existed, skip [%s][%s][%s]\n",
-							*address.NodeName, address.TargetRef.Namespace, address.TargetRef.Name)
+						log.Printf("normal interface of ebpf existed, skip [%s][%s]\n",
+							address.TargetRef.Namespace, address.TargetRef.Name)
 						break
 					} else {
 						//index位2代表是network模式的pod,对于这些类型的pod,
@@ -117,8 +120,8 @@ func (c *Controller) addAndUpdate(new *corev1.Endpoints, nodename string) {
 						//这里只能准确关联到 IN 方向的请求
 						c.Ebpfs[2].AppendPod(ports, address.TargetRef.Name,
 							address.TargetRef.Namespace, new.Name)
-						log.Printf("hostnetwork interface of ebpf existed, skip [%s][%s][%s]\n",
-							*address.NodeName, address.TargetRef.Namespace, address.TargetRef.Name)
+						log.Printf("hostnetwork interface of ebpf existed, skip [%s][%s]\n",
+							address.TargetRef.Namespace, address.TargetRef.Name)
 						break
 					}
 				}
@@ -137,6 +140,38 @@ func (c *Controller) addAndUpdate(new *corev1.Endpoints, nodename string) {
 }
 
 func (c *Controller) getNetfaceIndex(pod string, namespace string) (int, error) {
+	var result string
+	var err error
+	var container string
+	result, err = c.ExecPod(pod, namespace, "")
+
+	if err != nil && strings.Contains(err.Error(), "container name must be specified") {
+		container, err = c.getContainerName(pod, namespace)
+		if err != nil {
+			return 0, err
+		}
+		result, err = c.ExecPod(pod, namespace, container)
+	}
+	if err != nil {
+		return 0, err
+	}
+	s := strings.Trim(result, "\n")
+	id, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
+func (c *Controller) getContainerName(pod string, namespace string) (string, error) {
+	p, err := c.Clientset.CoreV1().Pods(namespace).Get(context.TODO(), pod, metav1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+	return p.Spec.Containers[0].Name, nil
+}
+
+func (c *Controller) ExecPod(pod string, namespace string, container string) (string, error) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	execOpt := &corev1.PodExecOptions{
@@ -145,7 +180,7 @@ func (c *Controller) getNetfaceIndex(pod string, namespace string) (int, error) 
 		Stderr: true,
 		TTY:    false,
 		//TODO: 一个pod中有多个container的时候如何进入default容器
-		Container: "",
+		Container: container,
 		Command: []string{
 			"cat",
 			"/sys/class/net/eth0/iflink",
@@ -161,7 +196,7 @@ func (c *Controller) getNetfaceIndex(pod string, namespace string) (int, error) 
 
 	exec, err := remotecommand.NewSPDYExecutor(c.Config, "POST", req.URL())
 	if err != nil {
-		return 0, errors.New("NewSPDYExecutor: " + err.Error())
+		return "", errors.New("NewSPDYExecutor: " + err.Error())
 	}
 
 	err = exec.Stream(remotecommand.StreamOptions{
@@ -171,17 +206,12 @@ func (c *Controller) getNetfaceIndex(pod string, namespace string) (int, error) 
 		Tty:    false,
 	})
 	if err != nil {
-		return 0, errors.New("exec.Stream:" + err.Error())
+		return "", errors.New("exec.Stream:" + err.Error())
 	}
 	if len(stderr.Bytes()) > 0 {
-		return 0, errors.New(stderr.String())
+		return "", errors.New(stderr.String())
 	}
-	s := strings.Trim(stdout.String(), "\n")
-	id, err := strconv.Atoi(s)
-	if err != nil {
-		return 0, err
-	}
-	return id, nil
+	return stdout.String(), nil
 
 }
 
