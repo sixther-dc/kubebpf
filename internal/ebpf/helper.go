@@ -31,7 +31,7 @@ type MapPackage struct {
 type Metric struct {
 	//HTTP, RPC, MySQL etc.
 	Type uint32
-	//从本pod看来是被请求(0)还是请求(1)
+	//从本pod来看是被请求(0)还是请求(1)
 	Flow        int
 	DstIP       string
 	DstPort     uint16
@@ -51,9 +51,9 @@ type Metric struct {
 }
 
 func (m *Metric) String() string {
-	return fmt.Sprintf("%s %d %d [%s][%d] --> [%s][%d][%s %s] ====> %s [%dms] \n%s %s %s %d\n",
+	return fmt.Sprintf("%s %d %d [%s][%d] --> [%s][%d][%s %s] ====> %s [%dms] \n%s %s %s %s %d\n",
 		time.Now().Format("2006-01-02 15:04:05"), m.Type, m.Flow, m.SrcIP, m.SrcPort, m.DstIP, m.DstPort, m.Method, m.URL, m.Code, m.Duration,
-		m.NodeName, m.NameSpace, m.PodName, m.IfIndex,
+		m.NodeName, m.NameSpace, m.PodName, m.ServiceName, m.IfIndex,
 	)
 }
 
