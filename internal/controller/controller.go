@@ -29,11 +29,11 @@ type Controller struct {
 	informer  cache.SharedIndexInformer
 	Clientset *kubernetes.Clientset
 	Config    *rest.Config
-	Ch        chan ebpf.MapPackage
+	Ch        chan ebpf.Metric
 	Ebpfs     map[int]*ebpf.Ebpf
 }
 
-func NewController(ch chan ebpf.MapPackage) Controller {
+func NewController(ch chan ebpf.Metric) Controller {
 	// config, err := rest.InClusterConfig()
 	config := OutOfClusterAuth()
 	// if config != nil {
@@ -68,7 +68,7 @@ func (c *Controller) Run() {
 			newEndpoint := obj.(*corev1.Endpoints)
 			// var oldEndpoint *corev1.Endpoints
 			c.addAndUpdate(newEndpoint, nodename)
-			// log.Printf("%+v %+v %s\n", newEndpoint, oldEndpoint, "Added")
+			// log.Printf("%+v %s\n", newEndpoint, "Added")
 		},
 		// DeleteFunc: func(obj interface{}) {
 		// 	endpoint := obj.(*corev1.Endpoints)
@@ -88,32 +88,49 @@ func (c *Controller) Run() {
 }
 
 func (c *Controller) addAndUpdate(new *corev1.Endpoints, nodename string) {
+	ports := []int32{0}
 	for _, subsets := range new.Subsets {
 		for _, address := range subsets.Addresses {
 			if address.NodeName != nil && *address.NodeName == nodename {
-				// log.Printf("endpoint ip: %v, node: %v, type: %v, pod: %v, ns: %v\n", address.IP, *address.NodeName, address.TargetRef.Kind, address.TargetRef.Name, address.TargetRef.Namespace)
-				index, err := c.getNetfaceIndex(address.TargetRef.Name, address.TargetRef.Namespace)
+				// log.Printf("endpoint ip: %v, node: %v, type: %v, pod: %v, ns: %v\n",
+				// 	address.IP, *address.NodeName, address.TargetRef.Kind,
+				// 	address.TargetRef.Name, address.TargetRef.Namespace)
+				index, err := c.getNetfaceIndex(address.TargetRef.Name,
+					address.TargetRef.Namespace)
 				if err != nil {
 					log.Printf("Get netface index error: %v\n", err)
 					break
 				}
-				//index位2代表是network模式的pod,对于这些类型的pod,统一使用一次socket的syscall，然后使用端口来设置其元数据。
-				if index != 2 {
-					break
-				}
 				if index == 2 {
-					_, ok := c.Ebpfs[2]
-					if ok {
-						log.Printf("network type interface existed, skip\n")
+					ports = getPorts(subsets.Ports)
+				}
+				_, ok := c.Ebpfs[index]
+				if ok {
+					//会有多个endpint对应一个pod的不同端口的情况, 对于普通类型的pod流量去全采集
+					if index != 2 {
+						log.Printf("normal interface of ebpf existed, skip [%s][%s][%s]\n",
+							*address.NodeName, address.TargetRef.Namespace, address.TargetRef.Name)
+						break
+					} else {
+						//index位2代表是network模式的pod,对于这些类型的pod,
+						//统一使用一次socket的syscall，然后使用端口来设置其元数据,
+						//这里只能准确关联到 IN 方向的请求
+						c.Ebpfs[2].AppendPod(ports, address.TargetRef.Name,
+							address.TargetRef.Namespace, new.Name)
+						log.Printf("hostnetwork interface of ebpf existed, skip [%s][%s][%s]\n",
+							*address.NodeName, address.TargetRef.Namespace, address.TargetRef.Name)
 						break
 					}
 				}
-				ebpf := ebpf.NewEbpf(index, *address.NodeName, address.TargetRef.Name, address.TargetRef.Namespace, new.Name, c.Ch)
-				c.Ebpfs[index] = ebpf
+				ebpf := ebpf.NewEbpf(index, address.IP, ports, *address.NodeName, address.TargetRef.Name,
+					address.TargetRef.Namespace, new.Name, c.Ch)
 				err = ebpf.Load()
 				if err != nil {
-					log.Printf("Load ebpf error[%s][%s][%s]: %v\n", *address.NodeName, address.TargetRef.Namespace, address.TargetRef.Name, err)
+					log.Printf("Load ebpf error[%s][%s][%s]: %v\n", *address.NodeName,
+						address.TargetRef.Namespace, address.TargetRef.Name, err)
+					break
 				}
+				c.Ebpfs[index] = ebpf
 			}
 		}
 	}
@@ -167,12 +184,22 @@ func (c *Controller) getNetfaceIndex(pod string, namespace string) (int, error) 
 	return id, nil
 
 }
+
+func getPorts(e []corev1.EndpointPort) []int32 {
+	var ports []int32
+	for _, v := range e {
+		ports = append(ports, v.Port)
+	}
+	return ports
+}
+
 func OutOfClusterAuth() (config *rest.Config) {
 
 	var err error
 	var kubeconfig *string
 	if home := homeDir(); home != "" {
-		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
+		kubeconfig = flag.String("kubeconfig",
+			filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
 	} else {
 		kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
 	}

@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -11,13 +12,31 @@ import (
 )
 
 type MapPackage struct {
-	Type        uint32
+	//HTTP, RPC, MySQL etc.
+	Type     uint32
+	DstIP    string
+	DstPort  uint16
+	SrcIP    string
+	SrcPort  uint16
+	Ack      uint32
+	Seq      uint32
+	Duration uint32
+	Host     string
+	Method   string
+	Protocol string
+	URL      string
+	Code     string
+}
+
+type Metric struct {
+	//HTTP, RPC, MySQL etc.
+	Type uint32
+	//从本pod看来是被请求(0)还是请求(1)
+	Flow        int
 	DstIP       string
 	DstPort     uint16
 	SrcIP       string
 	SrcPort     uint16
-	Ack         uint32
-	Seq         uint32
 	Duration    uint32
 	Host        string
 	Method      string
@@ -31,9 +50,9 @@ type MapPackage struct {
 	ServiceName string
 }
 
-func (m *MapPackage) String() string {
-	return fmt.Sprintf("%s [%s][%d] --> [%s][%d][%s %s] ====> %s [%dms] \n%s %s %s %d\n",
-		time.Now().Format("2006-01-02 15:04:05"), m.SrcIP, m.SrcPort, m.DstIP, m.DstPort, m.Method, m.URL, m.Code, m.Duration,
+func (m *Metric) String() string {
+	return fmt.Sprintf("%s %d %d [%s][%d] --> [%s][%d][%s %s] ====> %s [%dms] \n%s %s %s %d\n",
+		time.Now().Format("2006-01-02 15:04:05"), m.Type, m.Flow, m.SrcIP, m.SrcPort, m.DstIP, m.DstPort, m.Method, m.URL, m.Code, m.Duration,
 		m.NodeName, m.NameSpace, m.PodName, m.IfIndex,
 	)
 }
@@ -95,6 +114,34 @@ func Htons(i uint16) uint16 {
 	return *(*uint16)(unsafe.Pointer(&b[0]))
 }
 
+// Htonl converts to network byte order long uint32.
+func Htonl(i uint32) uint32 {
+	b := make([]byte, 4)
+	binary.BigEndian.PutUint32(b, i)
+	return *(*uint32)(unsafe.Pointer(&b[0]))
+}
+
+// IP4toDec transforms and IPv4 to decimal
+func IP4toDec(IPv4Addr string) uint32 {
+	bits := strings.Split(IPv4Addr, ".")
+
+	b0, _ := strconv.Atoi(bits[0])
+	b1, _ := strconv.Atoi(bits[1])
+	b2, _ := strconv.Atoi(bits[2])
+	b3, _ := strconv.Atoi(bits[3])
+
+	var sum uint32
+
+	// left shifting 24,16,8,0 and bitwise OR
+
+	sum += uint32(b0) << 24
+	sum += uint32(b1) << 16
+	sum += uint32(b2) << 8
+	sum += uint32(b3)
+
+	return sum
+}
+
 // OpenRawSock 创建一个原始的socket套接字
 func OpenRawSock(index int) (int, error) {
 	// ETH_P_IP: Internet Protocol version 4 (IPv4)
@@ -104,7 +151,8 @@ func OpenRawSock(index int) (int, error) {
 	// ETH_P_LOOP: Loopback protocol
 	const ETH_P_ALL uint16 = 0x03
 
-	sock, err := syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW|syscall.SOCK_NONBLOCK|syscall.SOCK_CLOEXEC, int(Htons(ETH_P_ALL)))
+	sock, err := syscall.Socket(syscall.AF_PACKET,
+		syscall.SOCK_RAW|syscall.SOCK_NONBLOCK|syscall.SOCK_CLOEXEC, int(Htons(ETH_P_ALL)))
 	if err != nil {
 		return 0, err
 	}

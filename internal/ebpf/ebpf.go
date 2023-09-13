@@ -13,12 +13,18 @@ import (
 )
 
 type Ebpf struct {
-	IfIndex     int
+	IfIndex   int
+	IPaddress string
+	NodeName  string
+	//hostnetwork类型的pod,使用pod来区分k8s的元数据
+	PortMap map[int32]K8SMeta
+	Ch      chan Metric
+}
+
+type K8SMeta struct {
 	PodName     string
-	NodeName    string
 	NameSpace   string
 	ServiceName string
-	Ch          chan MapPackage
 }
 
 const (
@@ -27,16 +33,36 @@ const (
 	ProtocolICMP  = 1                        // Internet Control Message
 )
 
-func NewEbpf(ifindex int, nodename string, podname string, namespace string, servicename string, ch chan MapPackage) *Ebpf {
+func NewEbpf(ifindex int, ip string, ports []int32, nodename string, podname string,
+	namespace string, servicename string, ch chan Metric) *Ebpf {
+	portMap := make(map[int32]K8SMeta)
+	for _, v := range ports {
+		portMap[v] = K8SMeta{
+			PodName:     podname,
+			NameSpace:   namespace,
+			ServiceName: servicename,
+		}
+	}
 	return &Ebpf{
-		IfIndex:     ifindex,
-		PodName:     podname,
-		NodeName:    nodename,
-		NameSpace:   namespace,
-		ServiceName: servicename,
-		Ch:          ch,
+		IfIndex:   ifindex,
+		IPaddress: ip,
+		NodeName:  nodename,
+		PortMap:   portMap,
+		Ch:        ch,
 	}
 }
+
+func (e *Ebpf) AppendPod(ports []int32, podname string,
+	namespace string, servicename string) {
+	for _, v := range ports {
+		e.PortMap[v] = K8SMeta{
+			PodName:     podname,
+			NameSpace:   namespace,
+			ServiceName: servicename,
+		}
+	}
+}
+
 func (e *Ebpf) Load() error {
 	eBPFprogram := GetEBPFProg()
 
@@ -68,10 +94,52 @@ func (e *Ebpf) Load() error {
 		return err
 	}
 	// defer syscall.SetsockoptInt(sock, syscall.SOL_SOCKET, SO_DETACH_BPF, prog.FD())
-
+	// log.Printf("=======ip, %v\n", e.IPaddress)
+	// log.Printf("=====FFFF==ip, %v\n", uint64(Htonl(IP4toDec(e.IPaddress))))
+	const keyIPAddr uint32 = 1
+	if err := coll.DetachMap("filter_map").Put(keyIPAddr, uint64(Htonl(IP4toDec(e.IPaddress)))); err != nil {
+		return err
+	}
 	m := coll.DetachMap("response_map")
 	go e.FanInMetric(m)
 	return nil
+}
+
+func (e *Ebpf) Converet(p *MapPackage) *Metric {
+	m := new(Metric)
+	m.Type = p.Type
+	m.DstIP = p.DstIP
+	m.DstPort = p.DstPort
+	m.SrcIP = p.SrcIP
+	m.SrcPort = p.SrcPort
+	m.Duration = p.Duration
+	m.Host = p.Host
+	m.Method = p.Method
+	m.Protocol = p.Protocol
+	m.URL = p.URL
+	m.Code = p.Code
+	m.NodeName = e.NodeName
+	m.IfIndex = e.IfIndex
+	if m.DstIP == e.IPaddress {
+		m.Flow = 0
+	} else {
+		m.Flow = 1
+	}
+	if e.IfIndex != 2 {
+		m.PodName = e.PortMap[0].PodName
+		m.NameSpace = e.PortMap[0].NameSpace
+		m.ServiceName = e.PortMap[0].ServiceName
+	} else {
+		//针对hostnetwork的pod, 不记录OUT方向的请求,因为这种请求没有任何标记它是属于哪一个pod
+		_, ok := e.PortMap[int32(m.DstPort)]
+		if !ok {
+			return nil
+		}
+		m.PodName = e.PortMap[int32(m.DstPort)].PodName
+		m.NameSpace = e.PortMap[int32(m.DstPort)].NameSpace
+		m.ServiceName = e.PortMap[int32(m.DstPort)].ServiceName
+	}
+	return m
 }
 
 func (e *Ebpf) FanInMetric(m *ebpf.Map) {
@@ -82,16 +150,15 @@ func (e *Ebpf) FanInMetric(m *ebpf.Map) {
 	for {
 		for m.Iterate().Next(&key, &val) {
 			value := DecodeMapItem(val)
-			value.IfIndex = e.IfIndex
-			value.NodeName = e.NodeName
-			value.NameSpace = e.NameSpace
-			value.PodName = e.PodName
-			value.ServiceName = e.ServiceName
-			fmt.Printf("%+v\n", value)
+			metric := e.Converet(value)
+			fmt.Printf("%+v\n", metric)
 			if err := m.Delete(key); err != nil {
 				panic(err)
 			}
-			e.Ch <- *value
+			if metric == nil {
+				break
+			}
+			e.Ch <- *metric
 		}
 		time.Sleep(1 * time.Second)
 	}

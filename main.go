@@ -19,7 +19,7 @@ func main() {
 	if err := rlimit.RemoveMemlock(); err != nil {
 		log.Fatal(err)
 	}
-	ch := make(chan ebpf.MapPackage)
+	ch := make(chan ebpf.Metric)
 	controller := controller.NewController(ch)
 	controller.Run()
 	for m := range ch {

@@ -39,6 +39,14 @@ struct package_t {
 	__u32 type;
 };
 
+//用于接受用户程序传输过来的目标IP
+struct bpf_map_def SEC("maps/package_map") filter_map = {
+  	.type = BPF_MAP_TYPE_HASH,
+	.key_size = sizeof(__u32),
+	.value_size = sizeof(__u64),
+	.max_entries = 1024 * 16,
+};
+
 // 定义了一个名为request_map的map，用于临时记录请求包，以便配对完整的请求/响应包
 struct bpf_map_def SEC("maps/package_map") request_map = {
   	.type = BPF_MAP_TYPE_HASH,
@@ -106,6 +114,18 @@ void __load_payload_to_map(struct __sk_buff *skb, __u32 poffset,  char p[180]) {
     }
 }
 
+
+//从用户态程序中获取目标IP
+int __get_target_ip() {
+	__u32 filter_ip_key = 1;
+  	__u32 *us_ipAddress;
+  	us_ipAddress = bpf_map_lookup_elem(&filter_map, &filter_ip_key);
+	if (!us_ipAddress) {
+        return 0;
+    }
+	return *us_ipAddress;
+}
+
 // int __handle_requst_package(int typem, struct package_t *p, struct __sk_buff *skb, __u32 poffset) {
 // 		struct package_t req = {};
 // 		req.srcip = p->srcip;
@@ -127,11 +147,11 @@ int socket__filter_package(struct __sk_buff *skb)
 {
 	// Skip non-IP packets
 	if (load_half(skb, offsetof(struct ethhdr, h_proto)) != ETH_P_IP)
-		return 0;
+		return -1;
 
 	// Skip non-TCP packets
 	if (load_byte(skb, ETH_HLEN + offsetof(struct iphdr, protocol)) != IPPROTO_TCP)
-		return 0;
+		return -1;
 	struct package_t p = {};
   	__u32 poffset = 0;
 	// __u32 plength = 0;
@@ -153,6 +173,13 @@ int socket__filter_package(struct __sk_buff *skb)
   	ip_hlen = ip_hlen << 2;
   	tcp_hlen = tcp_hlen << 2;
 
+	__u32 ip;
+	ip = __get_target_ip();
+	//过滤掉非目标IP的数据包
+	if (iph.saddr != ip && iph.daddr != ip) {
+		return -1;
+	}
+
   	//算出tcp携带的数据的其实偏移位置
   	poffset = ETH_HLEN + ip_hlen + tcp_hlen;
   	//算出tcp携带的数据的长度
@@ -173,7 +200,7 @@ int socket__filter_package(struct __sk_buff *skb)
 		p.phase = P_REQUEST;
 		// bpf_ktime_get_ns 获取内核自启动以来的时长,单位是纳秒,这里获取不到系统当前时间.
 		p.duration = bpf_ktime_get_ns();
-		__load_payload_to_map(skb, poffset, p.req_payload);                                   
+		__load_payload_to_map(skb, poffset, p.req_payload);                   
 		bpf_map_update_elem(&request_map, &p.ack, &p, BPF_ANY);
 	} else if (__is_http_response(pre_char)) {
 		struct package_t *req;
