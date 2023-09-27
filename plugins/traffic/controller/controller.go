@@ -6,7 +6,7 @@ import (
 	"errors"
 	"flag"
 	"log"
-	"main/internal/ebpf"
+	"main/plugins/traffic/ebpf"
 	_ "net/http/pprof"
 	"os"
 	"path/filepath"

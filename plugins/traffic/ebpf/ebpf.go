@@ -151,7 +151,6 @@ func (e *Ebpf) FanInMetric(m *ebpf.Map) {
 		for m.Iterate().Next(&key, &val) {
 			value := DecodeMapItem(val)
 			metric := e.Converet(value)
-			fmt.Printf("%+v\n", metric)
 			if err := m.Delete(key); err != nil {
 				panic(err)
 			}
