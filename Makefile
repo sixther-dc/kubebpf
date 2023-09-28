@@ -7,7 +7,6 @@ CGO_EXTLDFLAGS_STATIC = '-w -extldflags "-static"'
 ## program
 
 .PHONY: $(PROGRAM)
-.PHONY: $(PROGRAM).bpf.c
 
 PROGRAM = main
 
@@ -17,7 +16,7 @@ all:
 .PHONY: $(PROGRAM)
 
 $(PROGRAM):
-	sh build.sh
+	sh -x tools/ebpf/build/build.sh
 	CC=$(CLANG) \
 		CGO_ENABLED=1 \
 		CGO_CFLAGS=$(CGO_CFLAGS_STATIC) \
@@ -40,4 +39,4 @@ cat:
 .PHONY: clean
 clean:
 	rm -rf main
-	rm -rf $(PROGRAM).bpf.o $(PROGRAM).om
+	rm -rf target

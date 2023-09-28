@@ -1,8 +1,8 @@
 #include <linux/bpf.h>
-#include "include/bpf_helpers.h"
+#include "../../include/bpf_helpers.h"
 // #include <bpf/bpf_helpers.h>
-#include "include/bpf_endian.h"
-#include "include/types.h"
+#include "../../include/bpf_endian.h"
+#include "../../include/types.h"
 #include <linux/if_ether.h>
 #include <linux/if_packet.h>
 #include <linux/ip.h>

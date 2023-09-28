@@ -165,7 +165,7 @@ func (e *Ebpf) FanInMetric(m *ebpf.Map) {
 }
 
 func GetEBPFProg() []byte {
-	b, err := ioutil.ReadFile("main.bpf.o")
+	b, err := ioutil.ReadFile("target/traffic.bpf.o")
 	if err != nil {
 		log.Println("Could not read BPF object file", err.Error())
 	}

@@ -1,4 +1,6 @@
 /main
 /main.bpf.o
 /vendor/
-/go.sum
+/target
+/1.log
+/1.sh
