@@ -1,14 +1,15 @@
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: pvc-influxdb
+  name: pv-ebpf-influxdb
 spec:
   accessModes:
   - ReadWriteOnce
   capacity:
     storage: 1000Gi
   local:
-    path: /data/pvc-influxdb
+    path: ${INFLUXDB_PV_PATH}
+    # /data/pv-ebpf-influxdb
   nodeAffinity:
     required:
       nodeSelectorTerms:
@@ -16,7 +17,6 @@ spec:
         - key: kubernetes.io/hostname
           operator: In
           values:
-          - cn-hangzhou.172.16.174.45
+          - ${INFLUXDB_HOST}
   persistentVolumeReclaimPolicy: Delete
-  # storageClassName: dice-local-volume
   volumeMode: Filesystem
