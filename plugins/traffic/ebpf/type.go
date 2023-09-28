@@ -93,8 +93,6 @@ func DecodeMapItem(e []byte) *MapPackage {
 	m.URL = url
 	m.Host = host
 	code := DecodeHTTPResponse(e[212:392])
-	// fmt.Printf("request, %+v\n", string(e[32:212]))
-	// fmt.Printf("response, %+v\n", string(e[212:392]))
 	m.Code = code
 	m.Type = binary.LittleEndian.Uint32(e[392:396])
 	return m

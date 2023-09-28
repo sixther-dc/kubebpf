@@ -1,7 +1,7 @@
 package traffic
 
 import (
-	"fmt"
+	"log"
 	"strconv"
 	"time"
 
@@ -46,17 +46,15 @@ func (t *Traffic) Gather(c chan metric.Metric) {
 				}
 			}
 			c <- m.CovertMetric()
-			// fmt.Println(m.String())
 		case <-calTicker.C:
 			for k, v := range redMetric {
 				v.QPS = float32(v.RequestCount) / 60
-				v.ErrRate = float32(v.ErrCount) / float32(v.RequestCount)
+				v.ErrRate = float32(v.ErrCount) / float32(v.RequestCount) * 100
 				v.Duration = float32(v.DurationCount) / float32(v.RequestCount)
-				// fmt.Println(v.String())
 				c <- v.CovertMetric()
 				delete(redMetric, k)
 			}
-			fmt.Printf("testststt %+v\n", redMetric)
+			log.Printf("redmetric map is empty %+v\n", redMetric)
 		}
 	}
 }
