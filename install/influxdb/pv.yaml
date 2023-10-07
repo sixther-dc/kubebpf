@@ -9,7 +9,6 @@ spec:
     storage: 1000Gi
   local:
     path: ${INFLUXDB_PV_PATH}
-    # /data/pv-ebpf-influxdb
   nodeAffinity:
     required:
       nodeSelectorTerms:
