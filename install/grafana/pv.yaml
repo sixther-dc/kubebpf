@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-ebpf-grafana
+spec:
+  accessModes:
+  - ReadWriteOnce
+  capacity:
+    storage: 1000Gi
+  local:
+    path: ${GRAFANA_PV_PATH}
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - ${GRAFANA_HOST}
+  persistentVolumeReclaimPolicy: Delete
+  volumeMode: Filesystem

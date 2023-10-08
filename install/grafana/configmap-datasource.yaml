@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasource
+  namespace: ${NAMESPACE}
+data:
+  influxdb.yaml: |
+    apiVersion: 1
+    deleteDatasources:
+    - name: ebpf-influxdb
+      orgId: 1
+    datasources:
+    - orgId: 1
+      name: ebpf-influxdb
+      type: influxdb
+      uid: Jnhf-FiSz
+      typeLogoUrl: ''
+      access: proxy
+      url: ${INFLUX_ADDR}
+      withCredentials: false
+      isDefault: false
+      jsonData:
+        defaultBucket: ${INFLUX_BUCKET}
+        httpMode: POST
+        organization: ${INFLUX_ORG}
+        version: Flux
+      secureJsonFields:
+        token: true
+      secureJsonData:
+        token: ${INFLUX_TOKEN}
+      version: 4
+      readOnly: false
+

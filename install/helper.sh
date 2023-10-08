@@ -12,6 +12,10 @@ function __get_sts {
     kubectl get sts -n "$1" "$2" | awk -v s="$2" 'BEGIN{ok=1}{if($1==s){split($2,a,"/");if(a[1]==a[2]){ok=0;exit 0}}}END{exit ok}'
 }
 
+function __get_deploy {
+    kubectl get deploy -n "$1" "$2" | awk -v s="$2" 'BEGIN{ok=1}{if($1==s){split($2,a,"/");if(a[1]==a[2]&&a[1]==$3&&a[1]==$4){ok=0;exit 0}}}END{exit ok}'
+}
+
 #等待sts running, 超时1分钟
 function __wait_sts {
     timeout=true
@@ -19,6 +23,24 @@ function __wait_sts {
         echo "check $1/$2 sleep 10s"
         sleep 10
         if __get_sts "$1" "$2"; then
+            timeout=false
+            break
+        fi
+    done
+    if [[ "$timeout" == true ]]; then
+        echo "check $1/$2 timeout"
+        exit 1
+    fi
+    echo "$1/$2: ready"
+}
+
+#等待 deploy running, 超时1分钟
+function __wait_deploy {
+    timeout=true
+    for i in {1..6}; do
+        echo "check $1/$2 sleep 10s"
+        sleep 10
+        if __get_deploy "$1" "$2"; then
             timeout=false
             break
         fi

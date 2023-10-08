@@ -1,0 +1,852 @@
+{
+    "annotations": {
+      "list": [
+        {
+          "builtIn": 1,
+          "datasource": {
+            "type": "datasource",
+            "uid": "grafana"
+          },
+          "enable": true,
+          "hide": true,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "name": "Annotations & Alerts",
+          "target": {
+            "limit": 100,
+            "matchAny": false,
+            "tags": [],
+            "type": "dashboard"
+          },
+          "type": "dashboard"
+        }
+      ]
+    },
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "graphTooltip": 0,
+    "id": 41,
+    "links": [],
+    "liveNow": false,
+    "panels": [
+      {
+        "datasource": {
+          "type": "datasource",
+          "uid": "-- Mixed --"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisCenteredZero": false,
+              "axisColorMode": "series",
+              "axisLabel": "",
+              "axisPlacement": "left",
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 23,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "viz": false
+              },
+              "lineInterpolation": "smooth",
+              "lineStyle": {
+                "fill": "solid"
+              },
+              "lineWidth": 1,
+              "pointSize": 4,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "auto",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 0,
+          "y": 0
+        },
+        "id": 5,
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "list",
+            "placement": "bottom",
+            "showLegend": true
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "pluginVersion": "10.0.0",
+        "targets": [
+          {
+            "datasource": {
+              "type": "influxdb",
+              "uid": "Jnhf-FiSz"
+            },
+            "query": "from(bucket: \"ebpf\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) =>\n      r._measurement == \"red\" and r._field == \"qps\" and r.nodename == \"cn-hangzhou.172.16.174.45\" and r.podname =~ /${podname}$/ and r.nodename =~ /${nodename}$/ and r.servicename =~ /${servicename}$/ and r.namespace =~ /${namespace}$/\n  ) \n  |> map(fn: (r) => ({r with\n      podname: r.podname,\n      namespace: r.namespace,\n      nodename: r.nodename,\n      servicename: r.servicename,\n      qps: r._value,\n      ts: r._time,\n    })\n  )\n  |> keep(columns: [\"qps\", \"ts\", \"podname\", \"namespace\", \"servicename\", \"nodename\"])\n  |> yield()",
+            "refId": "A"
+          }
+        ],
+        "title": "Request (n/s)",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "type": "datasource",
+          "uid": "-- Mixed --"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisCenteredZero": false,
+              "axisColorMode": "series",
+              "axisLabel": "",
+              "axisPlacement": "left",
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 25,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "viz": false
+              },
+              "lineInterpolation": "smooth",
+              "lineStyle": {
+                "fill": "solid"
+              },
+              "lineWidth": 1,
+              "pointSize": 4,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "auto",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 8,
+          "y": 0
+        },
+        "id": 3,
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "list",
+            "placement": "bottom",
+            "showLegend": true
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "pluginVersion": "10.0.0",
+        "targets": [
+          {
+            "datasource": {
+              "type": "influxdb",
+              "uid": "Jnhf-FiSz"
+            },
+            "query": "from(bucket: \"ebpf\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) =>\n      r._measurement == \"red\" and r._field == \"errrate\" and r.nodename == \"cn-hangzhou.172.16.174.45\" and r.podname =~ /${podname}$/ and r.nodename =~ /${nodename}$/ and r.servicename =~ /${servicename}$/ and r.namespace =~ /${namespace}$/\n  ) \n  |> map(fn: (r) => ({r with\n      podname: r.podname,\n      namespace: r.namespace,\n      nodename: r.nodename,\n      servicename: r.servicename,\n      errrate: r._value, \n      ts: r._time,\n    })\n  )\n  |> keep(columns: [\"errrate\", \"ts\", \"podname\", \"namespace\", \"servicename\", \"nodename\"])\n  |> yield()",
+            "refId": "A"
+          }
+        ],
+        "title": "ErrorRate (%)",
+        "transformations": [],
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "type": "datasource",
+          "uid": "-- Mixed --"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisCenteredZero": false,
+              "axisColorMode": "series",
+              "axisLabel": "",
+              "axisPlacement": "left",
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 23,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "viz": false
+              },
+              "lineInterpolation": "smooth",
+              "lineStyle": {
+                "fill": "solid"
+              },
+              "lineWidth": 1,
+              "pointSize": 4,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "auto",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 16,
+          "y": 0
+        },
+        "id": 4,
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "list",
+            "placement": "bottom",
+            "showLegend": true
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "pluginVersion": "10.0.0",
+        "targets": [
+          {
+            "datasource": {
+              "type": "influxdb",
+              "uid": "Jnhf-FiSz"
+            },
+            "query": "from(bucket: \"ebpf\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) =>\n      r._measurement == \"red\" and r._field == \"duration\" and r.nodename == \"cn-hangzhou.172.16.174.45\" and r.podname =~ /${podname}$/ and r.nodename =~ /${nodename}$/ and r.servicename =~ /${servicename}$/ and r.namespace =~ /${namespace}$/\n  ) \n  |> map(fn: (r) => ({r with\n      podname: r.podname,\n      namespace: r.namespace,\n      nodename: r.nodename,\n      servicename: r.servicename,\n      duration: r._value,\n      ts: r._time,\n    })\n  )\n  |> keep(columns: [\"duration\", \"ts\", \"podname\", \"namespace\", \"servicename\", \"nodename\"])\n  |> yield()",
+            "refId": "A"
+          }
+        ],
+        "title": "Duration (ms)",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "type": "influxdb",
+          "uid": "Jnhf-FiSz"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "continuous-reds"
+            },
+            "custom": {
+              "align": "auto",
+              "cellOptions": {
+                "type": "auto"
+              },
+              "filterable": false,
+              "inspect": false
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "状态码"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": 86
+                },
+                {
+                  "id": "color",
+                  "value": {
+                    "fixedColor": "red",
+                    "mode": "shades"
+                  }
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "响应时间(ms)"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": 140
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Node"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": 232
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Pod"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": 377
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "URL"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": 257
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "源Port"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": 82
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "流向"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": 62
+                },
+                {
+                  "id": "mappings",
+                  "value": [
+                    {
+                      "options": {
+                        "0": {
+                          "index": 0,
+                          "text": "IN"
+                        },
+                        "1": {
+                          "index": 1,
+                          "text": "OUT"
+                        }
+                      },
+                      "type": "value"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "目的端口"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": 84
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "类型"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": 58
+                },
+                {
+                  "id": "mappings",
+                  "value": [
+                    {
+                      "options": {
+                        "1": {
+                          "index": 0,
+                          "text": "HTTP"
+                        }
+                      },
+                      "type": "value"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Service"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": 161
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "源IP"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": 103
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "目的IP"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": 110
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "方法"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": 68
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {
+          "h": 24,
+          "w": 24,
+          "x": 0,
+          "y": 8
+        },
+        "id": 2,
+        "maxDataPoints": 100,
+        "options": {
+          "cellHeight": "sm",
+          "footer": {
+            "countRows": false,
+            "enablePagination": true,
+            "fields": [],
+            "reducer": [
+              "sum"
+            ],
+            "show": false
+          },
+          "frameIndex": 75,
+          "showHeader": true,
+          "sortBy": [
+            {
+              "desc": false,
+              "displayName": "响应时间(ms)"
+            }
+          ]
+        },
+        "pluginVersion": "10.0.0",
+        "targets": [
+          {
+            "datasource": {
+              "type": "influxdb",
+              "uid": "Jnhf-FiSz"
+            },
+            "query": "from(bucket: \"ebpf\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) =>\n      r._measurement == \"traffic\" and r.nodename == \"cn-hangzhou.172.16.174.45\" and r.flow =~ /${flow}$/ and r.url =~ /${url}.*$/ and r.podname =~ /${podname}$/ and r.nodename =~ /${nodename}$/ and r.servicename =~ /${servicename}$/ and r.namespace =~ /${namespace}$/\n  ) \n  |> map(fn: (r) => ({r with\n      duration: r._value,\n      nodename: r.nodename,\n      podname: r.podname,\n      namespace: r.namespace,\n      ts: r._time,\n      code: r.code,\n      url: r.url,\n      srcip: r.srcip,\n      srcport: r.srcport,\n      dstip: r.dstip,\n      dstport: r.dstport,\n      servicename: r.servicename,\n      type: r.type,\n      flow: r.flow,\n      method: r.method,\n\n    })\n  )\n  |> keep(columns: [\"duration\", \"nodename\", \"podname\", \"namespace\", \"ts\", \"code\", \"url\", \"srcport\", \"srcip\", \"dstip\", \"dstport\", \"servicename\", \"type\", \"flow\", \"method\"])\n  |> limit(n:10)\n  |> yield()",
+            "refId": "A"
+          }
+        ],
+        "title": "Request Log",
+        "transformations": [
+          {
+            "id": "labelsToFields",
+            "options": {
+              "mode": "columns"
+            }
+          },
+          {
+            "id": "merge",
+            "options": {}
+          },
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {},
+              "indexByName": {
+                "code": 0,
+                "dstip": 10,
+                "dstport": 11,
+                "duration": 1,
+                "flow": 12,
+                "method": 2,
+                "namespace": 4,
+                "nodename": 7,
+                "podname": 5,
+                "servicename": 6,
+                "srcip": 8,
+                "srcport": 9,
+                "ts": 14,
+                "type": 13,
+                "url": 3
+              },
+              "renameByName": {
+                "code": "状态码",
+                "dstip": "目的IP",
+                "dstport": "目的端口",
+                "duration": "响应时间(ms)",
+                "flow": "流向",
+                "method": "方法",
+                "namespace": "Namespace",
+                "nodename": "Node",
+                "podname": "Pod",
+                "servicename": "Service",
+                "srcip": "源IP",
+                "srcport": "源Port",
+                "ts": "时间",
+                "type": "类型",
+                "url": "URL"
+              }
+            }
+          }
+        ],
+        "type": "table"
+      }
+    ],
+    "refresh": "",
+    "schemaVersion": 38,
+    "style": "dark",
+    "tags": [],
+    "templating": {
+      "list": [
+        {
+          "allValue": ".",
+          "current": {
+            "selected": false,
+            "text": "All",
+            "value": "$__all"
+          },
+          "hide": 0,
+          "includeAll": true,
+          "label": "类型",
+          "multi": false,
+          "name": "type",
+          "options": [
+            {
+              "selected": true,
+              "text": "All",
+              "value": "$__all"
+            },
+            {
+              "selected": false,
+              "text": "HTTP",
+              "value": "1"
+            },
+            {
+              "selected": false,
+              "text": "RCP",
+              "value": "2"
+            },
+            {
+              "selected": false,
+              "text": "DNS",
+              "value": "3"
+            }
+          ],
+          "query": "HTTP : 1, RCP : 2, DNS : 3",
+          "queryValue": "",
+          "skipUrlSync": false,
+          "type": "custom"
+        },
+        {
+          "allValue": ".",
+          "current": {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          "hide": 0,
+          "includeAll": true,
+          "label": "流向",
+          "multi": false,
+          "name": "flow",
+          "options": [
+            {
+              "selected": true,
+              "text": "All",
+              "value": "$__all"
+            },
+            {
+              "selected": false,
+              "text": "IN",
+              "value": "0"
+            },
+            {
+              "selected": false,
+              "text": "OUT",
+              "value": "1"
+            }
+          ],
+          "query": "IN : 0, OUT : 1",
+          "queryValue": "",
+          "skipUrlSync": false,
+          "type": "custom"
+        },
+        {
+          "allValue": ".",
+          "current": {
+            "selected": false,
+            "text": "All",
+            "value": "$__all"
+          },
+          "datasource": {
+            "type": "influxdb",
+            "uid": "Jnhf-FiSz"
+          },
+          "definition": "import \"influxdata/influxdb/schema\"\nschema.tagValues(\n    bucket: \"ebpf\",\n    tag: \"namespace\",\n    predicate: (r) => true,\n)",
+          "description": "根据namespace查询",
+          "hide": 0,
+          "includeAll": true,
+          "label": "namespace",
+          "multi": false,
+          "name": "namespace",
+          "options": [],
+          "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(\n    bucket: \"ebpf\",\n    tag: \"namespace\",\n    predicate: (r) => true,\n)",
+          "refresh": 2,
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": 0,
+          "type": "query"
+        },
+        {
+          "allValue": ".",
+          "current": {
+            "selected": false,
+            "text": "All",
+            "value": "$__all"
+          },
+          "datasource": {
+            "type": "influxdb",
+            "uid": "Jnhf-FiSz"
+          },
+          "definition": "import \"influxdata/influxdb/schema\"\nschema.tagValues(\n    bucket: \"ebpf\",\n    tag: \"podname\",\n    predicate: (r) => r.namespace =~ /$namespace$/,\n)",
+          "description": "根据pod查询",
+          "hide": 0,
+          "includeAll": true,
+          "label": "podname",
+          "multi": false,
+          "name": "podname",
+          "options": [],
+          "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(\n    bucket: \"ebpf\",\n    tag: \"podname\",\n    predicate: (r) => r.namespace =~ /$namespace$/,\n)",
+          "refresh": 2,
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": 0,
+          "type": "query"
+        },
+        {
+          "allValue": ".",
+          "current": {
+            "selected": false,
+            "text": "All",
+            "value": "$__all"
+          },
+          "datasource": {
+            "type": "influxdb",
+            "uid": "Jnhf-FiSz"
+          },
+          "definition": "import \"influxdata/influxdb/schema\"\nschema.tagValues(\n    bucket: \"ebpf\",\n    tag: \"nodename\",\n    predicate: (r) => true,\n)",
+          "description": "根据节点查询",
+          "hide": 0,
+          "includeAll": true,
+          "label": "nodename",
+          "multi": false,
+          "name": "nodename",
+          "options": [],
+          "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(\n    bucket: \"ebpf\",\n    tag: \"nodename\",\n    predicate: (r) => true,\n)",
+          "refresh": 2,
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": 0,
+          "type": "query"
+        },
+        {
+          "allValue": ".",
+          "current": {
+            "selected": false,
+            "text": "All",
+            "value": "$__all"
+          },
+          "datasource": {
+            "type": "influxdb",
+            "uid": "Jnhf-FiSz"
+          },
+          "definition": "import \"influxdata/influxdb/schema\"\nschema.tagValues(\n    bucket: \"ebpf\",\n    tag: \"servicename\",\n    predicate: (r) => r.namespace =~ /$namespace$/,\n)",
+          "description": "根据servicename查询",
+          "hide": 0,
+          "includeAll": true,
+          "label": "servicename",
+          "multi": false,
+          "name": "servicename",
+          "options": [],
+          "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(\n    bucket: \"ebpf\",\n    tag: \"servicename\",\n    predicate: (r) => r.namespace =~ /$namespace$/,\n)",
+          "refresh": 2,
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": 0,
+          "type": "query"
+        },
+        {
+          "current": {
+            "selected": true,
+            "text": "",
+            "value": ""
+          },
+          "hide": 0,
+          "label": "URL",
+          "name": "url",
+          "options": [
+            {
+              "selected": true,
+              "text": "",
+              "value": ""
+            }
+          ],
+          "query": "",
+          "skipUrlSync": false,
+          "type": "textbox"
+        }
+      ]
+    },
+    "time": {
+      "from": "now-2d",
+      "to": "now"
+    },
+    "timepicker": {},
+    "timezone": "",
+    "title": "Request-Log",
+    "uid": "RweQaFiSz",
+    "version": 86,
+    "weekStart": ""
+  }

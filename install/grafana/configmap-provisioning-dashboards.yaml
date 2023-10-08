@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-provisioning-dashboards-config
+  namespace: ${NAMESPACE}
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+
+    providers:
+     - name: 'default'
+       orgId: 1
+       folder: ''
+       type: file
+       options:
+        path: /opt/ebpf/dashboards
+        foldersFromFilesStructure: true
