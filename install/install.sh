@@ -17,9 +17,9 @@ function __install_fluxdb {
     echo "install influxdb..."
     INFLUX_ADDR=http://influxdb.$NAMESPACE.svc.cluster.local:8086
     INFLUX_USERNAME=admin
-    INFLUX_ORG=ebpf
+    INFLUX_ORG=kubebpf
     INFLUX_PASSWORD=$(__generate_password)
-    INFLUX_BUCKET=ebpf
+    INFLUX_BUCKET=kubebpf
     cat influxdb/pv.yaml  | envsubst | kubectl apply -f -
     cat influxdb/statefulset.yml| envsubst | kubectl apply -f -
     __wait_sts $NAMESPACE influxdb
@@ -44,27 +44,19 @@ function __install_fluxdb {
         --write-bucket $bucketid \
         --description "for-ebpf" \
        | tail -n 1  | awk '{print $3}')
-    
 
-    echo influx addr:     $INFLUX_ADDR 
-    echo influx username: $INFLUX_USERNAME
-    echo influx password: $INFLUX_PASSWORD
-    echo influx org:      $INFLUX_ORG
-    echo influx bucket:   $INFLUX_BUCKET
-    echo influx token:    $INFLUX_TOKEN
-
-# influx addr:  http://influxdb.dc-ebpf.svc.cluster.local:8086
-# influx username: admin
-# influx password: K3m2KHSk0SA7fjm_TQTq2gPV
-# influx org: ebpf
-# influx bucket: ebpf
-# influx token: skqHl5ks_UZVwTgW9ycxh8jAmDh_NhkuHcs6VLP9s6brKBngM8TAmpOKqWZp5l5QMQ3OzdJCDZct4jCmkwIAQA==
+    echo INFLUX_ADDR:     $INFLUX_ADDR  >> .influxdb_info
+    echo INFLUX_USERNAME: $INFLUX_USERNAME  >> .influxdb_info
+    echo INFLUX_PASSWORD: $INFLUX_PASSWORD  >> .influxdb_info
+    echo INFLUX_ORG:      $INFLUX_ORG  >> .influxdb_info
+    echo INFLUX_BUCKET:   $INFLUX_BUCKET  >> .influxdb_info
+    echo INFLUX_TOKEN:    $INFLUX_TOKEN  >> .influxdb_info
+    export INFLUX_ADDR
+    export INFLUX_ORG
+    export INFLUX_BUCKET
+    export INFLUX_TOKEN
 }
 
-export INFLUX_ADDR=http://influxdb.dc-ebpf.svc.cluster.local:8086
-export INFLUX_ORG=ebpf
-export INFLUX_BUCKET=ebpf
-export INFLUX_TOKEN=skqHl5ks_UZVwTgW9ycxh8jAmDh_NhkuHcs6VLP9s6brKBngM8TAmpOKqWZp5l5QMQ3OzdJCDZct4jCmkwIAQA==
 # install grafana
 function __install_grafana {
     echo "install grafana..."
@@ -76,12 +68,14 @@ function __install_grafana {
 }
 
 # install ebpf agent
-# function __install_agent {
-
-# }
+function __install_agent {
+    echo "install agent..."
+    cat agent/role.yaml | envsubst | kubectl apply -f -
+    cat agent/daemonset.yaml | envsubst | kubectl apply -f -
+}
 # install
-# __install_fluxdb
+__install_fluxdb
 __install_grafana
-# __install_agent
+__install_agent
 
-echo "ending..."
+echo "install end..."

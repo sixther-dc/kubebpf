@@ -10,7 +10,7 @@ spec:
   resources:
     requests:
       storage: 1Gi
-  volumeName: pv-ebpf-grafana
+  volumeName: pv-kubebpf-grafana
 status:
   accessModes:
   - ReadWriteOnce
@@ -39,7 +39,7 @@ spec:
       containers:
         - name: grafana
           image: registry.erda.cloud/retag/ebpf-grafana:9.5.12
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 3000
               name: http-grafana

@@ -1,0 +1,48 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kubebpf
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kubebpf
+subjects:
+  - kind: ServiceAccount
+    name: kubebpf
+    namespace: ${NAMESPACE}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubebpf
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+      - services
+      - endpoints
+      - events
+      - configmaps
+      - nodes
+      - secrets
+      - persistentvolumes
+      - persistentvolumeclaims
+      - namespaces
+    verbs:
+      - get
+      - list
+  - apiGroups:
+    - ""
+    resources:
+    - pods/exec
+    verbs:
+    - create
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubebpf
+  namespace: ${NAMESPACE}

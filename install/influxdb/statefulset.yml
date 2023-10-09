@@ -66,7 +66,7 @@ spec:
         requests:
           storage: 10G
       # volumeMode: Filesystem
-      volumeName: pv-ebpf-influxdb
+      volumeName: pv-kubebpf-influxdb
 
 ---
 apiVersion: v1

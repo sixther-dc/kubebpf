@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
 
 	"main/metric"
 	"main/output/influxdb"
@@ -21,9 +22,11 @@ func main() {
 	if err := rlimit.RemoveMemlock(); err != nil {
 		log.Fatal(err)
 	}
-	influxdb := influxdb.NewInfluxdb("http://influxdb.default.svc.cluster.local:8086",
-		"erda", "ebpf",
-		"kWwVy7IfF05yWPdMIlP4k6VPfPV8Uy0rdr583W-0FZ0XYZ93isCyEXc4cKD9xUWVa9bNO2OLp6EakddB-lpbfw==").Run()
+	influxAddr := os.Getenv("INFLUX_ADDR")
+	influxOrg := os.Getenv("INFLUX_ORG")
+	influxBucket := os.Getenv("INFLUX_BUCKET")
+	influxToken := os.Getenv("INFLUX_TOKEN")
+	influxdb := influxdb.NewInfluxdb(influxAddr, influxOrg, influxBucket, influxToken).Run()
 
 	//初始化metric管道
 	ch := make(chan metric.Metric, 1000)
@@ -36,9 +39,7 @@ func main() {
 	for m := range ch {
 		//处理metric, print / influxdb / prometheus / erda   等
 		// log.Printf("[%d] metric is wating to write\n", len(ch))
-		if m.Measurement == "red" {
-			log.Printf("red metric: %+v\n", m)
-		}
+		// log.Println(m.String())
 		influxdb.Write(m)
 	}
 

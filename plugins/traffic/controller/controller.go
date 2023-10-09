@@ -36,11 +36,13 @@ type Controller struct {
 }
 
 func NewController(ch chan ebpf.Metric) Controller {
-	// config, err := rest.InClusterConfig()
-	config := OutOfClusterAuth()
-	// if config != nil {
-	// 	log.Panic(err)
-	// }
+	var config *rest.Config
+	incluster := os.Getenv("IN_CLUSTER")
+	if incluster == "true" {
+		config = InClusterAuth()
+	} else {
+		config = OutOfClusterAuth()
+	}
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		log.Panic(err)
@@ -59,7 +61,7 @@ func (c *Controller) Run() {
 	stopper := make(chan struct{})
 	defer runtime.HandleCrash()
 
-	nodename := os.Getenv("nodename")
+	nodename := os.Getenv("NODE_NAME")
 	if nodename == "" {
 		log.Fatalf("nodename need to set !")
 	}
@@ -221,6 +223,15 @@ func getPorts(e []corev1.EndpointPort) []int32 {
 		ports = append(ports, v.Port)
 	}
 	return ports
+}
+
+func InClusterAuth() (config *rest.Config) {
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		klog.Infoln(err.Error())
+		os.Exit(3)
+	}
+	return
 }
 
 func OutOfClusterAuth() (config *rest.Config) {
