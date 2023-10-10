@@ -7,11 +7,11 @@ data:
   influxdb.yaml: |
     apiVersion: 1
     deleteDatasources:
-    - name: ebpf-influxdb
+    - name: kubebpf-influxdb
       orgId: 1
     datasources:
     - orgId: 1
-      name: ebpf-influxdb
+      name: kubebpf-influxdb
       type: influxdb
       uid: Jnhf-FiSz
       typeLogoUrl: ''

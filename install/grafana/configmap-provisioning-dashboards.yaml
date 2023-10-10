@@ -13,5 +13,5 @@ data:
        folder: ''
        type: file
        options:
-        path: /opt/ebpf/dashboards
+        path: /opt/kubebpf/dashboards
         foldersFromFilesStructure: true
