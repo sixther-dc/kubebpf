@@ -65,15 +65,15 @@ spec:
           resources:
             limits:
               cpu: "1"
-              memory: 4Gi
+              memory: 2Gi
             requests:
-              cpu: 500m
-              memory: 1Gi
+              cpu: 50m
+              memory: 50Mi
           volumeMounts:
             - mountPath: /var/lib/grafana
               name: data
-            # - mountPath: /etc/grafana
-            #   name: grafana-config
+            - mountPath: /etc/grafana
+              name: grafana-config
             - mountPath: /etc/grafana/provisioning/datasources
               name: grafana-datasource
             - name: grafana-provisioning-dashboards
@@ -82,9 +82,9 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: data-grafana
-      #   - name: grafana-config
-      #     configMap:
-      #       name: grafana-config
+        - name: grafana-config
+          configMap:
+            name: grafana-config
         - name: grafana-datasource
           configMap:
             name: grafana-datasource
@@ -115,7 +115,7 @@ metadata:
   namespace: ${NAMESPACE}
 spec:
   rules:
-  - host: grafana-ebpf.daily.terminus.io
+  - host: grafana-ebpf.xxx.io
     http:
       paths:
       - backend:

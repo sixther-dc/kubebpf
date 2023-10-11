@@ -35,7 +35,7 @@ function __install_fluxdb {
     bucketid=$(kubectl exec -it  influxdb-0 -n $NAMESPACE -- influx bucket create \
         --org=$INFLUX_ORG \
         --name=$INFLUX_BUCKET \
-        --retention 1h \
+        --retention 2d \
         | tail -n 1 | awk '{print $1}')
     #创建token
     INFLUX_TOKEN=$(kubectl exec -it  influxdb-0 -n $NAMESPACE -- influx auth create \
@@ -45,7 +45,7 @@ function __install_fluxdb {
         --description "for-ebpf" \
        | tail -n 1  | awk '{print $3}')
 
-    echo INFLUX_ADDR:     $INFLUX_ADDR  >> .influxdb_info
+    echo INFLUX_ADDR:     $INFLUX_ADDR  > .influxdb_info
     echo INFLUX_USERNAME: $INFLUX_USERNAME  >> .influxdb_info
     echo INFLUX_PASSWORD: $INFLUX_PASSWORD  >> .influxdb_info
     echo INFLUX_ORG:      $INFLUX_ORG  >> .influxdb_info
@@ -60,6 +60,7 @@ function __install_fluxdb {
 # install grafana
 function __install_grafana {
     echo "install grafana..."
+    cat grafana/configmap-config.yaml | envsubst | kubectl apply -f -
     cat grafana/configmap-provisioning-dashboards.yaml | envsubst | kubectl apply -f -
     cat grafana/configmap-datasource.yaml  | envsubst | kubectl apply -f -
     cat grafana/pv.yaml  | envsubst | kubectl apply -f -

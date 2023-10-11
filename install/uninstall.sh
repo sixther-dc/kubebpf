@@ -12,5 +12,5 @@ kubectl delete pv pv-kubebpf-influxdb
 kubectl delete pv pv-kubebpf-grafana
 
 echo "kubebpf uninstalled..."
-echo "please delete directory of influxdb, node: $INFLUXDB_HOST, dir: $INFLUXDB_PV_PATH ."
-echo "please delete directory of grafana, node: $GRAFANA_HOST, dir: $GRAFANA_PV_PATH ."
+echo "please delete directory of influxdb, node: $INFLUXDB_HOST, dir: $INFLUXDB_PV_PATH"
+echo "please delete directory of grafana, node: $GRAFANA_HOST, dir: $GRAFANA_PV_PATH"

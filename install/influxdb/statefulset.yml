@@ -35,10 +35,10 @@ spec:
         resources:
           limits:
             cpu: "1"
-            memory: 4Gi
+            memory: 2Gi
           requests:
-            cpu: 500m
-            memory: 1Gi
+            cpu: 50m
+            memory: 50Mi
         terminationMessagePath: /dev/termination-log
         terminationMessagePolicy: File
         volumeMounts:
@@ -85,21 +85,21 @@ spec:
   sessionAffinity: None
   type: ClusterIP
 
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: influxdb
-  namespace: ${NAMESPACE}
-spec:
-  rules:
-  - host: influxdb-ebpf.daily.terminus.io
-    http:
-      paths:
-      - backend:
-          service:
-            name: influxdb
-            port:
-              number: 8086
-        path: /
-        pathType: Prefix
+# ---
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: influxdb
+#   namespace: ${NAMESPACE}
+# spec:
+#   rules:
+#   - host: influxdb-ebpf.xxx.io
+#     http:
+#       paths:
+#       - backend:
+#           service:
+#             name: influxdb
+#             port:
+#               number: 8086
+#         path: /
+#         pathType: Prefix
