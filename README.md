@@ -1,8 +1,8 @@
 ## 简介
-kubebpf 是基于 ebpf 技术在 kubernetes 环境中实践可观测性建设的项目，提供对上层业务零侵扰的方式采集业务的调用日志，服务的 R.E.D 指标等可观测性数据，采用 influxdb 对数据进行持久化，采用 grafana 进行可视化，支持一键安装，可以快速将 ebpf 能力在你的 kubernetes 环境中进行落地。用于采集 ebpf 数据的 agent 支持扩展，你可以开发自己的 ebpf 程序来采集需要的数据，并且可以将数据上报的其他系统中。
+kubebpf 是基于 ebpf 技术在 kubernetes 环境中实践可观测性建设的项目，提供对上层业务零侵扰的方式采集业务的调用日志，服务的 R.E.D 指标等可观测性数据，采用 influxdb 对数据进行持久化，采用 grafana 进行可视化，支持一键安装，可以快速将 ebpf 能力在你的 kubernetes 环境中进行落地。用于采集 ebpf 数据的 agent 支持扩展，你可以开发自己的 ebpf 程序来采集需要的数据，并且可以将数据上报到其他系统中。
 ![Dashboard](./docs/assets/dashboard.png)
 ## 功能特性
-- [x] HTTP流量分析， 基于 BPF_PROG_TYPE_SOCKET_FILTER 分析每一次的 HTTP 流量，并且跟 kubernetes 元数据关联，还原每一个 pod 的 http 请求，包含入方向以及出方向。
+- [x] HTTP流量分析， 基于 BPF_PROG_TYPE_SOCKET_FILTER 分析每一次的 HTTP 流量，并且跟 kubernetes 元数据关联，还原出每个 pod 的 http 请求，包含入方向以及出方向。
 - [x] R.E.D 指标统计，基于每个 pod 的 http 流量，计算出每个 pod 的 QPS，Error Rate，Latency等性能指标
 - [ ] 全局拓扑，基于http流量，绘制出整个 kubernetes 环境中的调用拓扑。
 - [ ] DNS 流量分析
@@ -13,7 +13,7 @@ kubebpf 是基于 ebpf 技术在 kubernetes 环境中实践可观测性建设的
 - 操作系统内核版本 >= 3.19。
 - Kubernetes版本 >= 1.16。
 - 为了防止监控数据将磁盘打满，因此限制了influxdb的bucket数据保存时间为2天，可以根据具体情况进行调制配置。
-- influxdb默认为单点不是，不建议生产环境使用，你可以根据自身场景进行扩展将数据接入自己的环境中。
+- influxdb默认为单点部署，不建议生产环境使用，你可以根据自身场景进行扩展将数据接入自己的环境中。
 ## 设计说明
 [文档](./docs/design.md)
 #### 架构图
@@ -26,11 +26,11 @@ kubebpf 是基于 ebpf 技术在 kubernetes 环境中实践可观测性建设的
 ``` bash
 cd install
 ```
-由于grafana跟influxdb均需要持久化存储，因为需要事项确定存储的位置，通过配置文件来设置。
+由于grafana跟influxdb均需要持久化存储，因为需要事先确定存储的位置，通过配置文件来设置。
 ``` bash
 vim config.ini
 
-# 如下是一个配置实例, 需要事先在节点上创建出对应的目录
+# 如下是一个配置示例, 需要事先在节点上创建出对应的目录
 [global]
 NAMESPACE=kubebpf
 [influxdb]
