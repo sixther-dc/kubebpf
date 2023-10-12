@@ -14,7 +14,9 @@ kubebpf 是基于 ebpf 技术在 kubernetes 环境中实践可观测性建设的
 - Kubernetes版本 >= 1.16。
 - 为了防止监控数据将磁盘打满，因此限制了influxdb的bucket数据保存时间为2天，可以根据具体情况进行调制配置。
 - influxdb默认为单点不是，不建议生产环境使用，你可以根据自身场景进行扩展将数据接入自己的环境中。
-## 架构
+## 设计说明
+[文档](./docs/design.md)
+#### 架构图
 ![Architecture](./docs/assets/architecture.png)
 - **agent**  通过 daemonset 部署在每一个节点上，通过 ebpf 采集可观测性数据，并将其写入到 influxdb中。
 - **influxdb** 持久化存储。
